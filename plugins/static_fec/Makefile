@@ -1,0 +1,23 @@
+SRC=$(shell find . -wholename "*protoops/*.c")
+OBJ=$(SRC:.c=.o)
+CFLAGS=-I../../picoquic -I../../picoquic/gf256/flec-moepgf/include -DDISABLE_PROTOOP_PRINTF \
+	-DDISABLE_PROTOOP_PRINTF_1
+
+all: $(SRC) $(OBJ)
+
+$(OBJ): %.o
+
+%.o: %.c
+	clang-9 $(CFLAGS) -O2 -fno-gnu-inline-asm -emit-llvm -c $< -o - | llc-9 -march=bpf -filetype=obj -o $@
+
+.PHONY: %.o
+
+clean:
+	rm -rf $(OBJ)
+	rm -rf verif
+
+remove_non_objects:
+	rm -rf $(SRC)
+	rm -rf $(HDR)
+	rm -rf $(shell find . -wholename "*.c")
+	rm -rf $(shell find . -wholename "*.h")
