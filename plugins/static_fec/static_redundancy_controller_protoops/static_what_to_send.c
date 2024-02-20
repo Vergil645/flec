@@ -20,6 +20,7 @@ protoop_arg_t static_what_to_send(picoquic_cnx_t *cnx) {
     plugin_state_t *state = get_plugin_state(cnx);
     if (!state)
         return PICOQUIC_ERROR_MEMORY;
+
     available_slot_reason_t reason = (available_slot_reason_t) get_cnx(cnx, AK_CNX_INPUT, 0);
     picoquic_path_t *path = (picoquic_path_t *) get_cnx(cnx, AK_CNX_INPUT, 1);
     uint64_t current_time = (uint64_t) get_cnx(cnx, AK_CNX_INPUT, 2);
@@ -29,13 +30,20 @@ protoop_arg_t static_what_to_send(picoquic_cnx_t *cnx) {
         wff->next_message_timestamp_microsec = UNDEFINED_SYMBOL_DEADLINE;
     }
     fec_window_t window = get_current_fec_window(cnx, wff);
+
     if (window_size(&window) > 0) {
-        run_algo(cnx, path, current_time, (static_redundancy_controller_t *) wff->controller, reason, &window);
+        pre_update_controller_state(cnx, (static_redundancy_controller_t *) wff->controller, &window);
     }
+
     window_source_symbol_id_t first_id_to_protect = 0;
     uint16_t number_of_symbols_to_protect = 0;
-    static_packet_type_t ptype = what_to_send(cnx, wff->controller, &first_id_to_protect, &number_of_symbols_to_protect, &window);
+    static_packet_type_t ptype = what_to_send(cnx, path, wff->controller, current_time, reason, &first_id_to_protect, &number_of_symbols_to_protect, &window);
     number_of_symbols_to_protect = MIN(number_of_symbols_to_protect, window_size(&window));
+
+    if (window_size(&window) > 0) {
+        post_update_controller_state(cnx, (static_redundancy_controller_t *) wff->controller, &window);
+    }
+
     what_to_send_t wts;
     switch(ptype) {
         case fec_packet:
@@ -48,8 +56,10 @@ protoop_arg_t static_what_to_send(picoquic_cnx_t *cnx) {
             wts = what_to_send_new_symbol;
             break;
     }
+
     set_cnx(cnx, AK_CNX_OUTPUT, 0, wts);
     set_cnx(cnx, AK_CNX_OUTPUT, 1, first_id_to_protect);
     set_cnx(cnx, AK_CNX_OUTPUT, 2, number_of_symbols_to_protect);
+
     return 0;
 }

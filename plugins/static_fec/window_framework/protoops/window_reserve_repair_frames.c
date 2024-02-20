@@ -37,9 +37,11 @@ protoop_arg_t reserve_repair_frames_protoop(picoquic_cnx_t *cnx) {
         if (!err)
             state->n_reserved_id_or_repair_frames++;
             // FIXME: don't we also need {state->n_repair_frames_sent_since_last_feedback++;} here???
-    } else if (feedback_implied
-                || (cnx_state == picoquic_state_server_ready && state->n_repair_frames_sent_since_last_feedback <= max_repair_frames_threshold/*wff->window_length*2*/)
-                || (cnx_state == picoquic_state_client_ready && state->n_repair_frames_sent_since_last_feedback <= client_max_repair_frames_threshold/*wff->window_length*2*/)) {
+    }
+    // else if (true || feedback_implied
+    //             || (cnx_state == picoquic_state_server_ready && state->n_repair_frames_sent_since_last_feedback <= max_repair_frames_threshold/*wff->window_length*2*/)
+    //             || (cnx_state == picoquic_state_client_ready && state->n_repair_frames_sent_since_last_feedback <= client_max_repair_frames_threshold/*wff->window_length*2*/)) {
+    else {
 
         PROTOOP_PRINTF(cnx, "NOTHING TO RESERVE, GENERATE !\n");
         if (!is_fec_window_empty(wff)) {
@@ -57,9 +59,10 @@ protoop_arg_t reserve_repair_frames_protoop(picoquic_cnx_t *cnx) {
         } else {
             PROTOOP_PRINTF(cnx, "EMPTY WINDOW, CANNOT GENERATE\n");
         }
-    } else {
-        PROTOOP_PRINTF(cnx, "ALREADY SENT %d REPAIR FRAMES, STOP SENDING IT BEFORE NEXT FEEDBACK\n", state->n_repair_frames_sent_since_last_feedback);
     }
+    // else {
+    //     PROTOOP_PRINTF(cnx, "ALREADY SENT %d REPAIR FRAMES, STOP SENDING IT BEFORE NEXT FEEDBACK\n", state->n_repair_frames_sent_since_last_feedback);
+    // }
     set_cnx(cnx, AK_CNX_OUTPUT, 0, has_reserved);
     return err;
 }

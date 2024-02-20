@@ -31,7 +31,7 @@ protoop_arg_t available_slot(picoquic_cnx_t *cnx) {
     args[0] = reason;
     what_to_send_t wts = 0;
     source_symbol_id_t first_id = 0;
-    uint16_t n_symbols_to_protect;
+    uint16_t n_symbols_to_protect = 0;
     int err = fec_what_to_send(cnx, path, current_time, reason, &wts, &first_id, &n_symbols_to_protect);
     if (err) {
         PROTOOP_PRINTF(cnx, "WHAT TO SEND ERROR: %d\n", err);
@@ -41,7 +41,7 @@ protoop_arg_t available_slot(picoquic_cnx_t *cnx) {
 
     if (state->n_reserved_id_or_repair_frames > 0 && wts != what_to_send_feedback_implied_repair_symbol) {
         fec_cancelled_packet(cnx, wts, first_id, n_symbols_to_protect);
-        PROTOOP_PRINTF(cnx, "ALREADY RESERVED FRAMES ARE PRESENT\n");
+        PROTOOP_PRINTF(cnx, "ALREADY RESERVED FRAMES ARE PRESENT\n"); // TODO: check on tests
         return 0;
     }
 
@@ -59,7 +59,8 @@ protoop_arg_t available_slot(picoquic_cnx_t *cnx) {
             protoop_arg_t could_reserve = 0;
             PROTOOP_PRINTF(cnx, "RESERVE, FIRST ID = %u\n", first_id);
             err = reserve_repair_frames(cnx, state->framework_sender, DEFAULT_SLOT_SIZE, state->symbol_size,
-                                        wts == what_to_send_feedback_implied_repair_symbol, wts == what_to_send_feedback_implied_repair_symbol,
+                                        wts == what_to_send_feedback_implied_repair_symbol, // feedback_implied
+                                        n_symbols_to_protect > 0, // protect_subset
                                         first_id, n_symbols_to_protect, &could_reserve);
             if (!could_reserve) {
                 // FIXME: don't we need to cancel packet???

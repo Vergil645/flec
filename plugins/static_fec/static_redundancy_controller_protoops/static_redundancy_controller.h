@@ -86,6 +86,12 @@ typedef struct {
     bool flush_dof_mode;
     int64_t n_fec_in_flight;
 
+    struct {
+        window_source_symbol_id_t first_id_to_protect;
+        uint16_t n_symbols_to_protect;
+    } fec_params;
+
+    window_source_symbol_id_t window_first_unprotected_id;
     window_source_symbol_id_t window_first_id_during_last_run;
     uint64_t cached_ad;
     uint64_t cached_md;
@@ -282,7 +288,7 @@ static __attribute__((always_inline)) bool window_intersects(fec_window_t* windo
 }
 
 // returns true if the intersection of these  windows is not empty, false otherwise
-static __attribute__((always_inline)) bool window_contains(fec_window_t *window, window_source_symbol_id_t id) {
+static __attribute__((always_inline)) bool window_contains(fec_window_t* window, window_source_symbol_id_t id) {
     return !is_window_empty(window) && window->start <= id && id < window->end;
 }
 
@@ -501,11 +507,14 @@ destroy_static_redundancy_controller(picoquic_cnx_t* cnx, static_redundancy_cont
     my_free(cnx, controller);
 }
 
-static __attribute__((always_inline)) int64_t r_times_granularity(static_redundancy_controller_t* controller) {
+static __attribute__((always_inline)) uint64_t l_times_granularity(static_redundancy_controller_t* controller) {
     if (controller->n_received_feedbacks == 0)
-        return GRANULARITY;
-    return GRANULARITY -
-           ((uint64_t)(controller->n_lost_slots * GRANULARITY) / ((uint64_t)controller->n_received_feedbacks));
+        return 0;
+    return ((uint64_t)(controller->n_lost_slots * GRANULARITY) / ((uint64_t)controller->n_received_feedbacks));
+}
+
+static __attribute__((always_inline)) int64_t r_times_granularity(static_redundancy_controller_t* controller) {
+    return GRANULARITY - (int64_t)l_times_granularity(controller);
 }
 
 static __attribute__((always_inline)) bool EW(picoquic_cnx_t* cnx, picoquic_path_t* path,
@@ -708,68 +717,271 @@ compute_md(picoquic_cnx_t* cnx, static_redundancy_controller_t* controller, fec_
     return md;
 }
 
+static __attribute__((always_inline)) void pre_update_controller_state(picoquic_cnx_t* cnx,
+                                                                       static_redundancy_controller_t* controller,
+                                                                       fec_window_t* current_window) {
+    plugin_state_t* state = get_plugin_state(cnx);
+    if (!state) {
+        PROTOOP_PRINTF(cnx, "MEMORY ERROR\n");
+        return;
+    }
+
+    // PROTOOP_PRINTF_1(cnx, "STATIC update_controller_state\n");
+
+    if (controller->window_first_unprotected_id < current_window->start) {
+        controller->window_first_unprotected_id = current_window->start;
+    }
+
+    // TODO: add seen packets concept and do MD = number of lost packets of the window - number of seen packets of the
+    // window
+
+    if (controller->window_first_id_during_last_run != current_window->start && current_window->start > 0) {
+        prune_md_buffer(cnx, controller, controller->window_first_id_during_last_run, current_window->start - 1);
+        prune_ad_buffer(cnx, controller, current_window);
+        PROTOOP_PRINTF(cnx, "PRUNE AD MD BECAUSE WINDOW HAS BEEN UPDATED\n");
+    }
+    // FIXME: wrap-around when the sampling period or bytes sent are too high
+    controller->md = compute_md(cnx, controller, current_window);
+    controller->ad = compute_ad(cnx, controller, current_window);
+    PROTOOP_PRINTF(cnx, "AD = %u, MD = %u\n", controller->ad, controller->md);
+    if (controller->md == 0 && controller->ad == 0) {
+        controller->d_times_granularity = 0;
+    } else if (controller->ad == 0) {
+        // no added degrees, but there are missing degrees: the ratio is infinite, we need to retransmit asap
+        controller->d_times_granularity = INT64_MAX;
+    } else {
+        controller->d_times_granularity = ((((uint64_t)controller->md * GRANULARITY)) / ((uint64_t)(controller->ad)));
+    }
+}
+
+static __attribute__((always_inline)) bool get_packet_for_retransmission(picoquic_cnx_t* cnx,
+                                                                         static_redundancy_controller_t* controller,
+                                                                         window_source_symbol_id_t* first_id_to_protect,
+                                                                         uint16_t* n_symbols_to_protect,
+                                                                         fec_window_t* window) {
+    uint64_t lost_slot;
+    bool dequeued;
+    window_packet_metadata_t md;
+    while ((dequeued = dequeue_elem_from_buffer_old(controller->lost_and_non_fec_retransmitted_slots, &lost_slot))) {
+        if (is_slot_in_history(controller->slots_history, lost_slot)) {
+            history_get_sent_slot_metadata(controller->slots_history, lost_slot, &md);
+            if ((md.source_metadata.number_of_symbols > 0 &&
+                 ((md.source_metadata.first_symbol_id + md.source_metadata.number_of_symbols - 1) >= window->start)) ||
+                (md.repair_metadata.number_of_repair_symbols > 0 &&
+                 ((md.repair_metadata.first_protected_source_symbol_id + md.repair_metadata.number_of_repair_symbols -
+                   1) >= window->start))) {
+                break;
+            }
+        }
+    }
+
+    if (dequeued) {
+        PROTOOP_PRINTF(cnx, "GOT SLOT %lu AS LOST AND NON RETRANSMITTED\n", lost_slot);
+        // in this redundancy controller, we assume that 1 packet == 1 source/repair symbol
+        if (md.source_metadata.number_of_symbols > 0) {
+            // this slot transported a source symbol
+            PROTOOP_PRINTF(cnx, "TRANSPORTED SOURCE SYMBOLS, FIRST ID = %u\n", md.source_metadata.first_symbol_id);
+            *first_id_to_protect = md.source_metadata.first_symbol_id;
+            *n_symbols_to_protect = NUMBER_OF_SOURCE_SYMBOLS_TO_PROTECT_IN_FB_FEC;
+            //                    PROTOOP_PRINTF(cnx, "FIRST ID IN LOST SLOT ID %u\n", *first_id_to_protect);
+        } else if (md.repair_metadata.number_of_repair_symbols > 0) {
+            *first_id_to_protect = md.repair_metadata.first_protected_source_symbol_id;
+            *n_symbols_to_protect = md.repair_metadata.n_protected_source_symbols;
+        } else {
+            PROTOOP_PRINTF(cnx, "ERROR: 0 SOURCE AND REPAIR SYMBOL IN THE LOST SLOT !!\n");
+        }
+    } else {
+        PROTOOP_PRINTF(cnx, "WARNING: NO ACTUAL LOST SLOT !!\n");
+    }
+
+    return dequeued;
+}
+
+static __attribute__((always_inline)) uint64_t div_ceil(uint64_t p, uint64_t q) { return (p + q - 1) / q; }
+
+static __attribute__((always_inline)) bool check_new_packet_condition(picoquic_cnx_t* cnx, picoquic_path_t* path,
+                                                               static_redundancy_controller_t* controller,
+                                                               uint64_t granularity, fec_window_t* current_window,
+                                                               uint64_t current_time) {
+
+    fec_window_t* malloced_window = my_malloc(cnx, sizeof(fec_window_t));
+    if (!malloced_window) {
+        return PICOQUIC_ERROR_MEMORY;
+    }
+    *malloced_window = *current_window;
+
+    protoop_arg_t args[5];
+    args[0] = (protoop_arg_t)path;
+    args[1] = (protoop_arg_t)controller;
+    args[2] = (protoop_arg_t)granularity;
+    args[3] = (protoop_arg_t)malloced_window;
+    args[4] = (protoop_arg_t)current_time;
+    int retval = run_noparam(cnx, "new_packet_condition", 5, args, NULL);
+    my_free(cnx, malloced_window);
+    return retval;
+}
+
 static __attribute__((always_inline)) static_packet_type_t
-what_to_send(picoquic_cnx_t* cnx, window_redundancy_controller_t c, window_source_symbol_id_t* first_id_to_protect,
+what_to_send(picoquic_cnx_t* cnx, picoquic_path_t* path, window_redundancy_controller_t c, uint64_t current_time,
+             available_slot_reason_t reason, window_source_symbol_id_t* first_id_to_protect,
              uint16_t* n_symbols_to_protect, fec_window_t* window) {
+    plugin_state_t* state = get_plugin_state(cnx);
+    if (!state)
+        return PICOQUIC_ERROR_MEMORY;
+
     static_redundancy_controller_t* controller = (static_redundancy_controller_t*)c;
-    bool wts_empty = is_buffer_empty_old(controller->what_to_send);
-    if (wts_empty && is_buffer_empty_old(controller->lost_and_non_fec_retransmitted_slots))
-        return nothing;
+
+    uint64_t cwin = (uint64_t)get_path(path, AK_PATH_CWIN, 0);
+    uint64_t bytes_in_transit = (uint64_t)get_path(path, AK_PATH_BYTES_IN_TRANSIT, 0);
+    uint32_t send_mtu = (uint32_t)get_path(path, AK_PATH_SEND_MTU, 0);
+    uint32_t p_cwin = (uint32_t)div_ceil(cwin, MIN((uint64_t)send_mtu, PICOQUIC_MAX_PACKET_SIZE));
+
+    // congestion window not full
+    bool can_send_new_or_fec = (cwin > bytes_in_transit + state->n_reserved_id_or_repair_frames * (uint64_t)send_mtu);
+    bool has_protected_data_to_send = state->has_fec_protected_data_to_send;
+
+    PROTOOP_PRINTF_1(cnx,
+                     "WTS 3: n_reserved_id_or_repair_frames=%lu, is_window_empty=%d, reason=%d, "
+                     "has_protected_data_to_send=%d, cwin=%lu, "
+                     "bytes_in_transit=%lu, send_mtu=%u, p_cwin=%u\n",
+                     state->n_reserved_id_or_repair_frames, is_window_empty(window), reason, has_protected_data_to_send,
+                     cwin, bytes_in_transit, send_mtu, p_cwin);
+
+    // FIXME: not data packets?
+    // TODO: reason = nack?
+
     buffer_elem_t type = nothing;
-    dequeue_elem_from_buffer_old(controller->what_to_send, &type);
-    if (type == fb_fec_packet || !is_buffer_empty_old(controller->lost_and_non_fec_retransmitted_slots)) {
-        uint64_t lost_slot;
-        bool dequeued;
-        window_packet_metadata_t md;
-        while (
-            (dequeued = dequeue_elem_from_buffer_old(controller->lost_and_non_fec_retransmitted_slots, &lost_slot))) {
-            // pass, the slot is too old, this means that it has been recovered at some point
-            if (is_slot_in_history(controller->slots_history, lost_slot)) {
-                history_get_sent_slot_metadata(controller->slots_history, lost_slot, &md);
-                // in this redundancy controller, we assume that 1 packet == 1 source/repair symbol
-                if ((md.source_metadata.number_of_symbols > 0 &&
-                     ((md.source_metadata.first_symbol_id + md.source_metadata.number_of_symbols - 1) >=
-                      window->start)) ||
-                    (md.repair_metadata.number_of_repair_symbols > 0 &&
-                     ((md.repair_metadata.first_protected_source_symbol_id +
-                       md.repair_metadata.number_of_repair_symbols - 1) >= window->start))) {
-                    // outdated compared to the window
-                    break;
+    if (state->n_reserved_id_or_repair_frames > 0) {
+        type = nothing;
+    } else if (is_window_empty(window)) {
+        if (get_packet_for_retransmission(cnx, controller, first_id_to_protect, n_symbols_to_protect, window)) {
+            type = fb_fec_packet;
+        } else {
+            type = nothing;
+        }
+    } else if (can_send_new_or_fec) {
+        if (is_buffer_empty_old(controller->what_to_send)) {
+            uint64_t lr_gran = 0;
+            uint16_t k = (uint16_t)(window->end - controller->window_first_unprotected_id);
+            uint16_t r = 0;
+            uint16_t r_max = 1;
+
+            if (!get_loss_parameters(cnx, path, current_time, GRANULARITY, &lr_gran, NULL, NULL)) {
+                PROTOOP_PRINTF(cnx, "WARNING: CANNOT GET LOSS RATE\n");
+                lr_gran = l_times_granularity(controller);
+            }
+            PROTOOP_PRINTF_1(cnx, "WTS: lr_gran=%lu\n", lr_gran);
+
+            r_max = MAX(r_max, (uint16_t)div_ceil((uint64_t)p_cwin * lr_gran, GRANULARITY));
+
+            if (controller->flush_dof_mode) {
+                // TODO: think more about it (can we send FEC?)
+
+                PROTOOP_PRINTF_1(cnx, "WTS: FLUSH DOF\n");
+
+                if (get_packet_for_retransmission(cnx, controller, first_id_to_protect, n_symbols_to_protect, window)) {
+                    add_elem_to_buffer_old(controller->what_to_send, fb_fec_packet);
+                } else if (k > 0) {
+                    k = MIN(k, p_cwin - r_max);
+                    r = (uint16_t)div_ceil((uint64_t)k * lr_gran, GRANULARITY - lr_gran); // FIXME: what if k ~= 1?
+                    r = MAX(r, 1);
+                    r = MIN(r, r_max);
+
+                    PROTOOP_PRINTF_1(cnx, "WTS: k=%u r=%u\n", k, r);
+
+                    controller->fec_params.first_id_to_protect = controller->window_first_unprotected_id;
+                    controller->fec_params.n_symbols_to_protect = k;
+
+                    for (uint16_t i = 0; i < r; ++i) {
+                        add_elem_to_buffer_old(controller->what_to_send, fec_packet);
+                    }
+                    controller->window_first_unprotected_id += k;
+                } else {
+                    // can't send anything
+                    PROTOOP_PRINTF(cnx, "WARNING: CANNOT SEND ANYTHING IN flush_dof_mode\n");
                 }
+            } else {
+                bool added_new_packet = false;
+
+                if (check_new_packet_condition(cnx, path, controller, GRANULARITY, window, current_time)) {
+                    add_elem_to_buffer_old(controller->what_to_send, new_rlnc_packet);
+                    added_new_packet = true;
+                } else if (k > 0) {
+                    k = MIN(k, p_cwin - r_max);
+                    r = (uint16_t)div_ceil((uint64_t)k * lr_gran, GRANULARITY - lr_gran); // FIXME: what if k ~= 1?
+                    r = MAX(r, 1);
+                    r = MIN(r, r_max);
+
+                    PROTOOP_PRINTF_1(cnx, "WTS: k=%u r=%u\n", k, r);
+
+                    controller->fec_params.first_id_to_protect = controller->window_first_unprotected_id;
+                    controller->fec_params.n_symbols_to_protect = k;
+
+                    for (uint16_t i = 0; i < r; ++i) {
+                        add_elem_to_buffer_old(controller->what_to_send, fec_packet);
+                    }
+                    controller->window_first_unprotected_id += k;
+                }
+
+                // we must take the newly added packet into account
+                int to_add = added_new_packet ? 1 : 0;
+                // TODO: see if this makes sense replacing 2*k by max_window_size
+                controller->flush_dof_mode = window_size(window) + to_add > MAX_SLOTS - 1; // 2*controller->k;
             }
         }
 
-        if (dequeued) {
-            PROTOOP_PRINTF(cnx, "GOT SLOT %lu AS LOST AND NON RETRANSMITTED\n", lost_slot);
-            // in this redundancy controller, we assume that 1 packet == 1 source/repair symbol
-            type = fb_fec_packet;
-            if (md.source_metadata.number_of_symbols > 0) {
-                // this slot transported a source symbol
-                PROTOOP_PRINTF(cnx, "TRANSPORTED SOURCE SYMBOLS, FIRST ID = %u\n", md.source_metadata.first_symbol_id);
-                *first_id_to_protect = md.source_metadata.first_symbol_id;
-                *n_symbols_to_protect = NUMBER_OF_SOURCE_SYMBOLS_TO_PROTECT_IN_FB_FEC;
-                //                    PROTOOP_PRINTF(cnx, "FIRST ID IN LOST SLOT ID %u\n", *first_id_to_protect);
-            } else if (md.repair_metadata.number_of_repair_symbols > 0) {
-                // FIXME: do we need to retransmit fec packets???
-                *first_id_to_protect = md.repair_metadata.first_protected_source_symbol_id;
-                *n_symbols_to_protect = md.repair_metadata.n_protected_source_symbols;
-            } else {
-                PROTOOP_PRINTF(cnx, "ERROR: 0 SOURCE AND REPAIR SYMBOL IN THE LOST SLOT !!\n");
+        if (dequeue_elem_from_buffer_old(controller->what_to_send, &type)) {
+            if (type == fec_packet) {
+                *first_id_to_protect = controller->fec_params.first_id_to_protect;
+                *n_symbols_to_protect = controller->fec_params.n_symbols_to_protect;
             }
+        } else if (get_packet_for_retransmission(cnx, controller, first_id_to_protect, n_symbols_to_protect, window)) {
+            type = fb_fec_packet;
         } else {
-            type = fec_packet;
+            type = nothing;
         }
-        //            dequeue_elem_from_buffer(controller->lost_and_non_fec_retransmitted_slots, &lost_slot);
-        if (type == fec_packet) {
-            // fb-fec when there is no lost and non retransmitted packet should be considered as FEC
-            controller->n_fec_in_flight++;
+    } else {
+        PROTOOP_PRINTF_1(cnx, "WTS: can_send_new_or_fec=0\n");
+
+        if (get_packet_for_retransmission(cnx, controller, first_id_to_protect, n_symbols_to_protect, window)) {
+            type = fb_fec_packet;
+        } else {
+            type = nothing;
         }
     }
+
+    switch (type) {
+    case new_rlnc_packet:
+        PROTOOP_PRINTF_1(cnx, "WTS: NEW: id=%u\n", window->end);
+        break;
+    case fec_packet:
+        PROTOOP_PRINTF_1(cnx, "WTS: FEC: first_id_to_protect=%u n_symbols_to_protect=%u\n", *first_id_to_protect,
+                         *n_symbols_to_protect);
+        controller->ad++;
+        controller->n_fec_in_flight++;
+        break;
+    case fb_fec_packet:
+        PROTOOP_PRINTF_1(cnx, "WTS: RETR: first_id_to_protect=%u n_symbols_to_protect=%u\n", *first_id_to_protect,
+                         *n_symbols_to_protect);
+        controller->ad++;
+        controller->n_fec_in_flight++;
+        break;
+    default:
+        PROTOOP_PRINTF_1(cnx, "WTS: NONE\n");
+        break;
+    }
+
     if (DEBUG_EVENT) {
         PROTOOP_PRINTF(cnx, "EVENT::{\"time\": %ld, \"type\": \"what_to_send\", \"wts\": %d, \"latest\": %u}\n",
                        picoquic_current_time(), type, controller->latest_symbol_protected_by_fec);
     }
     return type;
+}
+
+static __attribute__((always_inline)) void post_update_controller_state(picoquic_cnx_t* cnx,
+                                                                        static_redundancy_controller_t* controller,
+                                                                        fec_window_t* current_window) {
+    controller->window_first_id_during_last_run = current_window->start;
 }
 
 // if   type == fb_fec_packet: adds corresponding slot to controller->lost_and_non_fec_retransmitted_slots
@@ -854,131 +1066,6 @@ static __attribute__((always_inline)) void sent_packet(picoquic_cnx_t* cnx, uint
 }
 
 #define SECOND_IN_MICROSEC 1000000
-
-// either acked or recovered
-static __attribute__((always_inline)) void run_algo(picoquic_cnx_t* cnx, picoquic_path_t* path, uint64_t current_time,
-                                                    static_redundancy_controller_t* controller,
-                                                    available_slot_reason_t feedback, fec_window_t* current_window) {
-
-    plugin_state_t* state = get_plugin_state(cnx);
-    if (!state) {
-        PROTOOP_PRINTF(cnx, "MEMORY ERROR\n");
-        return;
-    }
-
-    PROTOOP_PRINTF_1(cnx, "kek645: STATIC run_algo\n");
-
-    // TODO: get_path(path, AK_PATH_CWIN, 0) > get_path(path, AK_PATH_BYTES_IN_TRANSIT, 0) + state->n_reserved_id_or_repair_frames*get_path(path, AK_PATH_SEND_MTU, 0)
-
-    // TODO: add seen packets concept and do MD = number of lost packets of the window - number of seen packets of the
-    // window
-
-    if (controller->window_first_id_during_last_run != current_window->start && current_window->start > 0) {
-        prune_md_buffer(cnx, controller, controller->window_first_id_during_last_run, current_window->start - 1);
-        prune_ad_buffer(cnx, controller, current_window);
-        PROTOOP_PRINTF(cnx, "PRUNE AD MD BECAUSE WINDOW HAS BEEN UPDATED\n");
-    }
-    // FIXME: wrap-around when the sampling period or bytes sent are too high
-    controller->md = compute_md(cnx, controller, current_window);
-    controller->ad = compute_ad(cnx, controller, current_window);
-    PROTOOP_PRINTF(cnx, "AD = %u, MD = %u\n", controller->ad, controller->md);
-    if (controller->md == 0 && controller->ad == 0) {
-        controller->d_times_granularity = 0;
-    } else if (controller->ad == 0) {
-        // no added degrees, but there are missing degrees: the ratio is infinite, we need to retransmit asap
-        controller->d_times_granularity = INT64_MAX;
-    } else {
-        controller->d_times_granularity = ((((uint64_t)controller->md * GRANULARITY)) / ((uint64_t)(controller->ad)));
-    }
-    bool added_new_packet = false;
-    int i;
-    if (is_buffer_empty_old(controller->what_to_send)) {
-        if (controller->flush_dof_mode) {
-            PROTOOP_PRINTF(cnx, "FLUSH DOF !!\n");
-            add_elem_to_buffer_old(controller->what_to_send, fb_fec_packet);
-            controller->n_fec_in_flight++; // FIXME: why only for this fb_fec_packet???
-            controller->ad++;
-        } else {
-            bool ew = EW(cnx, path, controller, GRANULARITY, current_window, current_time);
-            switch (controller->last_feedback) {
-            case available_slot_reason_none:
-                //                        if (false && EW(controller, current_window)) {
-                //                        if (allowed_to_send_fec_given_deadlines && ((normal_causal && EW(controller,
-                //                        current_window)) || (!fec_has_protected_data_to_send(cnx) &&
-                //                        bw_ratio_times_granularity > (GRANULARITY + GRANULARITY/10)))) {
-                if (ew) {
-                    for (i = 0; i < controller->m; i++) {
-                        add_elem_to_buffer_old(controller->what_to_send, fec_packet);
-                        controller->n_fec_in_flight++;
-                    }
-                    controller->ad += controller->m;
-                } else {
-
-                    // TODO: first check if new data are available to send ?
-                    added_new_packet = true;
-                    add_elem_to_buffer_old(controller->what_to_send, new_rlnc_packet);
-                }
-                break;
-            case available_slot_reason_nack:
-                if (!below_threshold(cnx, path, controller, GRANULARITY, current_time)) {
-                    if (!ew) {
-                        // TODO: first check if new data are available to send ?
-                        added_new_packet = true;
-                        add_elem_to_buffer_old(controller->what_to_send, new_rlnc_packet);
-                    } else {
-                        for (i = 0; i < controller->m; i++) {
-                            add_elem_to_buffer_old(controller->what_to_send, fec_packet);
-                            controller->n_fec_in_flight++;
-                        }
-                        controller->ad += controller->m;
-                    }
-                } else {
-                    add_elem_to_buffer_old(controller->what_to_send, fb_fec_packet);
-                    controller->ad++;
-                }
-                break;
-            case available_slot_reason_ack:;
-
-                if (ew) {
-                    PROTOOP_PRINTF(cnx, "EW !\n");
-                    for (i = 0; i < controller->m; i++) {
-                        add_elem_to_buffer_old(controller->what_to_send, fec_packet);
-                        controller->n_fec_in_flight++;
-                    }
-                    controller->ad += controller->m;
-                    controller->latest_symbol_when_fec_scheduled = current_window->end - 1;
-                } else {
-                    if (below_threshold(cnx, path, controller, GRANULARITY, current_time)) {
-                        PROTOOP_PRINTF(cnx, "ADD FEC\n");
-                        add_elem_to_buffer_old(controller->what_to_send, fb_fec_packet);
-                        controller->ad++;
-                    } else {
-                        if (ew) {
-                            for (i = 0; i < controller->m; i++) {
-                                add_elem_to_buffer_old(controller->what_to_send, fec_packet);
-                                controller->n_fec_in_flight++;
-                            }
-                            controller->ad += controller->m;
-                        } else {
-                            added_new_packet = true;
-                            add_elem_to_buffer_old(controller->what_to_send, new_rlnc_packet);
-                        }
-                    }
-                }
-                break;
-            default:
-                break;
-            }
-        }
-        // we must take the newly added packet into account
-        int to_add = added_new_packet ? 1 : 0;
-        // TODO: see if this makes sense replacing 2*k by max_window_size
-        controller->flush_dof_mode = window_size(current_window) + to_add > MAX_SLOTS - 1; // 2*controller->k;
-    } else {
-        PROTOOP_PRINTF(cnx, "BUFFER NOT EMPTY\n");
-    }
-    controller->window_first_id_during_last_run = current_window->start;
-}
 
 static __attribute__((always_inline)) void slot_acked(picoquic_cnx_t* cnx, window_redundancy_controller_t c,
                                                       fec_window_t* current_window, uint64_t slot) {
