@@ -506,14 +506,15 @@ destroy_static_redundancy_controller(picoquic_cnx_t* cnx, static_redundancy_cont
     my_free(cnx, controller);
 }
 
-static __attribute__((always_inline)) uint64_t l_times_granularity(static_redundancy_controller_t* controller) {
+static __attribute__((always_inline)) uint64_t l_times_granularity(static_redundancy_controller_t* controller,
+                                                                   uint64_t granularity) {
     if (controller->n_received_feedbacks == 0)
         return 0;
-    return ((uint64_t)(controller->n_lost_slots * GRANULARITY) / ((uint64_t)controller->n_received_feedbacks));
+    return ((uint64_t)(controller->n_lost_slots * granularity) / ((uint64_t)controller->n_received_feedbacks));
 }
 
 static __attribute__((always_inline)) int64_t r_times_granularity(static_redundancy_controller_t* controller) {
-    return GRANULARITY - (int64_t)l_times_granularity(controller);
+    return GRANULARITY - (int64_t)l_times_granularity(controller, GRANULARITY);
 }
 
 static __attribute__((always_inline)) bool EW(picoquic_cnx_t* cnx, picoquic_path_t* path,

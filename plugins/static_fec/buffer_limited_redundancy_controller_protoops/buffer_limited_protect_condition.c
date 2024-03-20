@@ -23,6 +23,11 @@ protoop_arg_t buffer_limited_protect_condition(picoquic_cnx_t* cnx) {
 
     bool fc_blocked = !fec_has_protected_data_to_send(cnx);
 
+    uint64_t cwin = (uint64_t)get_path(path, AK_PATH_CWIN, 0);
+    uint64_t bytes_in_transit = (uint64_t)get_path(path, AK_PATH_BYTES_IN_TRANSIT, 0);
+    uint64_t send_mtu = (uint64_t)get_path(path, AK_PATH_SEND_MTU, 0);
+    // uint32_t p_cwin = (uint32_t)div_ceil(cwin, MIN((uint64_t)send_mtu, PICOQUIC_MAX_PACKET_SIZE));
+    uint16_t rem_p_cwin = (uint16_t)div_ceil(cwin - bytes_in_transit, MIN(send_mtu, PICOQUIC_MAX_PACKET_SIZE));
     uint64_t wsize = (uint64_t)window_size(current_window);
     uint64_t lr_gran = 0;
     uint64_t gemodel_p_gran = 0;
@@ -37,13 +42,13 @@ protoop_arg_t buffer_limited_protect_condition(picoquic_cnx_t* cnx) {
     }
 
     get_loss_parameters(cnx, path, current_time, granularity, &lr_gran, &gemodel_p_gran, &gemodel_r_gran);
+    lr_gran = MIN(granularity / 2, 2 * lr_gran);
 
-    // r_max = 2 * MAX(1, (uint16_t)div_ceil(wsize * lr_gran, granularity - lr_gran));
-    r_max = MAX(1, (uint16_t)div_ceil(wsize * lr_gran, granularity - lr_gran));
+    // r_max = 2 * (1 + (uint16_t)(wsize * lr_gran / (granularity - lr_gran)));
+    // r_max = MAX(1, (uint16_t)div_ceil(wsize * lr_gran, granularity - lr_gran));
 
     // if (controller->n_fec_in_flight >= r_max) {
     //     PROTOOP_PRINTF_1(cnx, "BUFFER LIMITED PC: n_fec_in_flight=%lu, r_max=%lu\n", controller->n_fec_in_flight, r_max);
-
     //     return false;
     // }
 
@@ -55,7 +60,8 @@ protoop_arg_t buffer_limited_protect_condition(picoquic_cnx_t* cnx) {
     r = MAX((gemodel_r_gran == granularity) ? 1 : 1 + (granularity / gemodel_r_gran),
             (uint16_t)div_ceil((uint64_t)k * lr_gran, granularity - lr_gran));
     // r = MIN(r, r_max - controller->n_fec_in_flight); // no more than 2 "packs" or repair symbols in a window
-    r = MIN(r, r_max);
+    // r = MIN(r, r_max);
+    r = MIN(r, rem_p_cwin);
 
     if (protect) {
         PROTOOP_PRINTF_1(cnx, "BUFFER LIMITED PC: lr_gran=%lu, p_gran=%lu, r_gran=%lu k=%u, r=%u, window_first_unprotected_id=%u\n",
