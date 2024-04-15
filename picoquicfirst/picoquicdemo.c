@@ -200,14 +200,15 @@ static protoop_id_t congestion_set_fixed_cwin = { .id = "congestion_set_fixed_cw
 static protoop_id_t window_fec_framework_set_rwin_size = { .id = "window_fec_framework_set_rwin_size" };
 
 /**
- * sets the  fixed cwin assuming the diable_congestion_control plugin is plugged
+ * sets the  fixed cwin assuming the disable_congestion_control plugin is plugged
  */
 int set_fixed_cwin(picoquic_cnx_t *cnx, uint64_t cwin) {
     printf("set fixed cwin, cnx = %p\n", cnx);
-    int ret = protoop_prepare_and_run_extern_noparam(cnx, &congestion_set_fixed_cwin, NULL, cwin);
+    int ret = 0; //protoop_prepare_and_run_extern_noparam(cnx, &congestion_set_fixed_cwin, NULL, cwin);
     if (ret != 0) {
         fprintf(stdout, "could not set the cwin\n");
     }
+    cnx->fixed_cwin = cwin;
     printf("return, cnx = %p\n", cnx);
     return ret;
 }
@@ -357,7 +358,7 @@ static int first_server_callback(picoquic_cnx_t* cnx,
         return 0;
     }
 
-    if (fin_or_event == picoquic_callback_close || 
+    if (fin_or_event == picoquic_callback_close ||
         fin_or_event == picoquic_callback_application_close ||
         fin_or_event == picoquic_callback_stateless_reset) {
         if (ctx != NULL) {
@@ -701,6 +702,11 @@ int quic_server(const char* server_name, int server_port,
                         }
                     }
 
+                    if (fixed_cwin != 0) {
+                        printf("SET FIXED CWIN TO %lu\n", fixed_cwin);
+                        set_fixed_cwin(cnx_server, fixed_cwin);
+                    }
+
                     if (cc_algorithm) {
                         picoquic_set_congestion_algorithm(cnx_server, cc_algorithm);
                     }
@@ -710,11 +716,6 @@ int quic_server(const char* server_name, int server_port,
                             max_stream_receive_window_size = 2000000;
                         }
                         ret = fec_set_rwin_size(cnx_server, max_stream_receive_window_size, repair_receive_window_size);
-                    }
-
-                    if (fixed_cwin != 0) {
-                        printf("SET FIXED CWIN TO %lu\n", fixed_cwin);
-                        set_fixed_cwin(cnx_server, fixed_cwin);
                     }
 
                     printf("%" PRIx64 ": ", picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx_server)));
@@ -806,7 +807,7 @@ int quic_server(const char* server_name, int server_port,
                                 peer_addr, peer_addr_len, local_addr, local_addr_len,
                                 picoquic_get_local_if_index(path),
                                 (const char*)send_buffer, (int)send_length);
-                            
+
 
                             /* TODO: log sending packet. */
                         } else {
@@ -1048,7 +1049,7 @@ static int first_client_callback(picoquic_cnx_t* cnx,
         return 0;
     }
 
-    if (fin_or_event == picoquic_callback_close || 
+    if (fin_or_event == picoquic_callback_close ||
         fin_or_event == picoquic_callback_application_close ||
         fin_or_event == picoquic_callback_stateless_reset) {
         if (fin_or_event == picoquic_callback_application_close) {
@@ -1318,6 +1319,7 @@ int quic_client(const char* ip_address_text, int server_port, const char * sni,
         tp.initial_max_stream_data_bidi_remote = MIN(MAX(initial_receive_window_size, tp.initial_max_stream_data_bidi_remote), max_stream_receive_window_size);
         tp.initial_max_stream_data_uni = MIN(MAX(initial_receive_window_size, tp.initial_max_stream_data_uni), max_stream_receive_window_size);
         tp.initial_max_data = MAX(initial_receive_window_size, tp.initial_max_data);
+        printf("tp.initial_max_data = %lu\n", tp.initial_max_data);
         qclient->default_tp = &tp;
         /* Create a client connection */
         cnx_client = picoquic_create_cnx_with_transport_parameters(qclient, picoquic_null_connection_id, picoquic_null_connection_id,
@@ -1429,7 +1431,7 @@ int quic_client(const char* ip_address_text, int server_port, const char * sni,
                     if (F_log != NULL) {
                         if (bytes_sent > 0)
                         {
-                            picoquic_log_packet_address(F_log, 
+                            picoquic_log_packet_address(F_log,
                                 picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx_client)),
                                 cnx_client, (struct sockaddr*)&server_address, 0, bytes_sent, picoquic_current_time());
                         }
@@ -1796,7 +1798,7 @@ void usage()
     fprintf(stderr, "  -q output.qlog        qlog output file\n");
     fprintf(stderr, "  -S filename           if set, write plugin statistics in the specified file (- for stdout)\n");
     fprintf(stderr, "  -w stream_rwin_max    sets the maximum value in bytes for the size of the streams receive window\n");
-    fprintf(stderr, "  -E stream_rwin_max    sets the initial value in bytes for the size of the streams receive window\n");
+    fprintf(stderr, "  -E stream_rwin_init   sets the initial value in bytes for the size of the streams receive window\n");
     fprintf(stderr, "  -N n_requests         if -G is set, specifies how much time to perform the same request\n");
     fprintf(stderr, "  -I interval_microsec  if -G is set and -N > 1n specifies the interval between each request\n");
     fprintf(stderr, "  -W cwin               sets the congestion window\n");
@@ -1817,7 +1819,7 @@ typedef struct {
     picoquic_connection_id_t cnx_id_val;
 } cnx_id_callback_ctx_t;
 
-static void cnx_id_callback(picoquic_connection_id_t cnx_id_local, picoquic_connection_id_t cnx_id_remote, void* cnx_id_callback_ctx, 
+static void cnx_id_callback(picoquic_connection_id_t cnx_id_local, picoquic_connection_id_t cnx_id_remote, void* cnx_id_callback_ctx,
     picoquic_connection_id_t * cnx_id_returned)
 {
     uint64_t val64;
@@ -1996,18 +1998,23 @@ int main(int argc, char** argv)
                 fprintf(stderr, "Invalid max stream receive window size: %s\n", optarg);
                 usage();
             }
-            printf("SET RWIN TO %lu BYTES\n", max_stream_receive_window_size);
+            printf("SET MAX RWIN TO %lu BYTES\n", max_stream_receive_window_size);
             break;
         case 'E':
             initial_receive_window_size = atol(optarg);
             if (initial_receive_window_size <= 0) {
-                fprintf(stderr, "Invalid max stream receive window size: %s\n", optarg);
+                fprintf(stderr, "Invalid initial stream receive window size: %s\n", optarg);
                 usage();
             }
-            printf("SET RWIN TO %lu BYTES\n", max_stream_receive_window_size);
+            printf("SET INITIAL RWIN TO %lu BYTES\n", initial_receive_window_size);
             break;
         case 'W':
             fixed_cwin = atol(optarg);
+            initial_receive_window_size = fixed_cwin << 1;
+            max_stream_receive_window_size = fixed_cwin << 1;
+
+            printf("SET MAX RWIN TO %lu BYTES\n", max_stream_receive_window_size);
+            printf("SET INITIAL RWIN TO %lu BYTES\n", initial_receive_window_size);
             break;
         case 'N':
             n_requests = atoi(optarg);
@@ -2031,6 +2038,8 @@ int main(int argc, char** argv)
                 cc_algorithm = picoquic_cubic_algorithm;
             } else if (strcasecmp(optarg, "newreno") == 0) {
                 cc_algorithm = picoquic_newreno_algorithm;
+            } else if (strcasecmp(optarg, "nocc") == 0) {
+                cc_algorithm = picoquic_nocc_algorithm;
             } else {
                 fprintf(stderr, "Invalid cc algorithm: %s\n", optarg);
                 usage();

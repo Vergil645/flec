@@ -6,8 +6,6 @@
 #include <picoquic.h>
 
 protoop_arg_t bulk_protect_condition(picoquic_cnx_t* cnx) {
-    PROTOOP_PRINTF(cnx, "BULK PC!\n");
-
     picoquic_path_t* path = (picoquic_path_t*)get_cnx(cnx, AK_CNX_INPUT, 0);
     static_redundancy_controller_t* controller = (static_redundancy_controller_t*)get_cnx(cnx, AK_CNX_INPUT, 1);
     uint64_t granularity = (protoop_arg_t)get_cnx(cnx, AK_CNX_INPUT, 2);
@@ -55,7 +53,7 @@ protoop_arg_t bulk_protect_condition(picoquic_cnx_t* cnx) {
     // r = 1 + (uint16_t)(((uint64_t)k * lr_gran) / (granularity - lr_gran));
     r = rem_p_cwin;
     if (lr_gran != 0) {
-        uint64_t lr_gran_1 = MIN(granularity / 2, lr_gran * 2);
+        uint64_t lr_gran_1 = MIN(granularity / 5, lr_gran * 2);
         r = MIN(r, 1 + (uint16_t)(((uint64_t)k * lr_gran_1) / (granularity - lr_gran_1)));
     }
 

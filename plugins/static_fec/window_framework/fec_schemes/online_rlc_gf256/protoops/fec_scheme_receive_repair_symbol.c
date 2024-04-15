@@ -1,10 +1,12 @@
 
 #include <picoquic.h>
+
 #include "../../../../fec.h"
-#include "../headers/online_gf256_fec_scheme.h"
+#include "../../../framework_receiver.h"
 #include "../../prng/tinymt32.c"
 #include "../gf256/gf256.h"
-#include "../../../framework_receiver.h"
+#include "../headers/equation.h"
+#include "../headers/online_gf256_fec_scheme.h"
 
 /**
  *  fec_scheme_receive_repair_symbol(picoquic_cnx_t *cnx, online_gf256_fec_scheme_t *fec_scheme, window_repair_symbol_t *rs)
@@ -36,14 +38,19 @@ protoop_arg_t receive_repair_symbol(picoquic_cnx_t *cnx) {
 
 
     my_free(cnx, prng);
+
     equation_t *removed = NULL;
     int used_in_system = 0;
     int ret = wrapper_receive_repair_symbol(cnx, &fec_scheme->wrapper, eq, wff->received_source_symbols, &removed, &used_in_system);
+
+    if (removed != NULL) {
+        equation_free(cnx, removed);
+    }
     if (!used_in_system) {
         equation_free_keep_repair_payload(cnx, eq);
     }
-    set_cnx(cnx, AK_CNX_OUTPUT, 0, (protoop_arg_t) removed);
-    set_cnx(cnx, AK_CNX_OUTPUT, 1, (protoop_arg_t) used_in_system);
+
+    set_cnx(cnx, AK_CNX_OUTPUT, 0, (protoop_arg_t) used_in_system);
 
     return ret;
 }

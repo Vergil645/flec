@@ -41,8 +41,10 @@ static __attribute__((always_inline)) size_t predict_compressed_window_repair_fr
             else
                 break;
         }
+        PROTOOP_PRINTF(cnx, "PADDING LENGTH = %u\n", padding_length);
         retval += picoquic_varint_encode((uint8_t *) &buffer, sizeof(buffer), padding_index);
         retval += picoquic_varint_encode((uint8_t *) &buffer, sizeof(buffer), padding_length);
+        PROTOOP_PRINTF(cnx, "retval=%u symbol_size=%u\n", retval, symbol_size);
 
         // TODO: copy in two times, ignoring the padding
         if (padding_index) {

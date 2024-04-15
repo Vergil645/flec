@@ -32,7 +32,8 @@ protoop_arg_t available_slot(picoquic_cnx_t *cnx) {
     what_to_send_t wts = 0;
     source_symbol_id_t first_id = 0;
     uint16_t n_symbols_to_protect = 0;
-    int err = fec_what_to_send(cnx, path, current_time, reason, &wts, &first_id, &n_symbols_to_protect);
+    uint16_t n_repair_symbols = 0;
+    int err = fec_what_to_send(cnx, path, current_time, reason, &wts, &first_id, &n_symbols_to_protect, &n_repair_symbols);
     if (err) {
         PROTOOP_PRINTF(cnx, "WHAT TO SEND ERROR: %d\n", err);
         return err;
@@ -61,7 +62,7 @@ protoop_arg_t available_slot(picoquic_cnx_t *cnx) {
             err = reserve_repair_frames(cnx, state->framework_sender, DEFAULT_SLOT_SIZE, state->symbol_size,
                                         wts == what_to_send_feedback_implied_repair_symbol, // feedback_implied
                                         n_symbols_to_protect > 0, // protect_subset
-                                        first_id, n_symbols_to_protect, &could_reserve);
+                                        first_id, n_symbols_to_protect, n_repair_symbols, &could_reserve);
             if (!could_reserve) {
                 // FIXME: don't we need to cancel packet???
                 // if we could not reserve, we try sending a new packet

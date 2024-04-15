@@ -1,8 +1,10 @@
 
 #include <picoquic.h>
+
 #include "../../../../fec.h"
 #include "../../../framework_sender.h"
 #include "../../../framework_receiver.h"
+#include "../headers/equation.h"
 #include "../headers/online_gf256_fec_scheme.h"
 
 /**
@@ -22,11 +24,13 @@ protoop_arg_t receive_source_symbol(picoquic_cnx_t *cnx) {
     PROTOOP_PRINTF(cnx, "AFTER CREATE FROM ZEROCOPY\n");
 
     equation_t *removed = NULL;
-    int used_in_system = 0;
     PROTOOP_PRINTF(cnx, "BEFORE WRAPPER RECEIVE SOURCE SYMBOL\n");
-    int ret = wrapper_receive_source_symbol(cnx, &fec_scheme->wrapper, ss, &removed, &used_in_system);
+    int ret = wrapper_receive_source_symbol(cnx, &fec_scheme->wrapper, ss, &removed);
     PROTOOP_PRINTF(cnx, "AFTER WRAPPER RECEIVE SOURCE SYMBOL\n");
-    set_cnx(cnx, AK_CNX_OUTPUT, 0, (protoop_arg_t) removed);
-    set_cnx(cnx, AK_CNX_OUTPUT, 1, (protoop_arg_t) used_in_system);
+
+    if (removed != NULL) {
+        equation_free(cnx, removed);
+    }
+
     return ret;
 }

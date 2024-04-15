@@ -733,6 +733,7 @@ typedef struct st_picoquic_cnx_t {
     /* Flow control information */
     uint64_t data_sent;
     uint64_t data_received;
+    uint64_t fixed_cwin;
     uint64_t maxdata_local;
     uint64_t maxdata_remote;
     uint64_t max_stream_receive_window_size;

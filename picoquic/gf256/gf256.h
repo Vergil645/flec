@@ -25,9 +25,8 @@ extern "C" {
 #if SYMBOL_USE_ALT_LIBRARY == true
 
 #include "moepgf/moepgf.h"
-#endif
-
 extern struct moepgf gflib;
+#endif
 
 void picoquic_gf256_init();
 

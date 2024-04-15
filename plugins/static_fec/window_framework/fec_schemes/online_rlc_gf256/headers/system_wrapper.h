@@ -5,7 +5,7 @@
 #include "system.h"
 #include "../gf256/swif_symbol.h"
 #include "util.h"
-#include "arraylist.h"
+#include "../../../util/arraylist.h"
 #include "../../../window_receive_buffers.h"
 
 typedef struct {
@@ -40,8 +40,8 @@ static __attribute__((always_inline)) int id_in_unknowns(system_wrapper_t *wrapp
     return -1;
 }
 
-static __attribute__((always_inline)) int wrapper_receive_source_symbol(picoquic_cnx_t *cnx, system_wrapper_t *wrapper, window_source_symbol_t *ss, equation_t **removed, int *used_in_system) {
-    *used_in_system = 0;
+static __attribute__((always_inline)) int wrapper_receive_source_symbol(picoquic_cnx_t *cnx, system_wrapper_t *wrapper, window_source_symbol_t *ss, equation_t **removed) {
+    int used_in_system = 0;
     int index = -1;
     if (arraylist_is_empty(&wrapper->unknowns_ids) || ss->id < arraylist_get(&wrapper->unknowns_ids, 0)) {
         // should be ignored, because unknowns_ids[0] - 1 is the highest contiguously recieved
@@ -57,12 +57,12 @@ static __attribute__((always_inline)) int wrapper_receive_source_symbol(picoquic
         PROTOOP_PRINTF(cnx, "ADD SOURCE SYMBOL %u\n", ss->id);
         // unlikely
         int decoded = 0;
-        system_add_with_elimination(cnx, wrapper->system, eq, wrapper->inv_table, wrapper->mul_table, &decoded, removed, used_in_system);
-        if (*used_in_system) {
+        system_add_with_elimination(cnx, wrapper->system, eq, wrapper->inv_table, wrapper->mul_table, &decoded, removed, &used_in_system);
+        if (used_in_system) {
             arraylist_set(&wrapper->unknown_recovered, index, true);
         }
         // TODO; handle recovered symbols
-        if (!*used_in_system) {
+        if (!used_in_system) {
             equation_free(cnx, eq);
         }
     }

@@ -790,7 +790,7 @@ int picoquic_mark_active_stream(picoquic_cnx_t* cnx,
  * of whether or not the fin of the stream was reached, and also an indication
  * of whether or not the stream is still active. The function
  * returns the pointer to a memory address where to write the byte -- or
- * a NULL pointer in case of error. The application then copies the specified 
+ * a NULL pointer in case of error. The application then copies the specified
  * number of bytes at the provided address, and provide a return code 0 from
  * the callback in case of success, or non zero in case of error.
  */
@@ -805,7 +805,7 @@ uint8_t* picoquic_provide_stream_data_buffer(void* context, size_t nb_bytes, int
 int picoquic_add_to_stream(picoquic_cnx_t* cnx,
     uint64_t stream_id, const uint8_t* data, size_t length, int set_fin);
 
-/* Reset a stream, indicating that no more data will be sent on 
+/* Reset a stream, indicating that no more data will be sent on
  * that stream and that any data currently queued can be abandoned. */
 int picoquic_reset_stream(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint64_t local_stream_error);
@@ -849,6 +849,7 @@ typedef struct st_picoquic_congestion_algorithm_t {
 extern picoquic_congestion_algorithm_t* picoquic_newreno_algorithm;
 extern picoquic_congestion_algorithm_t* picoquic_cubic_algorithm;
 extern picoquic_congestion_algorithm_t* picoquic_bbr_algorithm;
+extern picoquic_congestion_algorithm_t* picoquic_nocc_algorithm;
 
 #define PICOQUIC_DEFAULT_CONGESTION_ALGORITHM picoquic_bbr_algorithm;
 

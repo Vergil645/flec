@@ -122,8 +122,10 @@ static __attribute__((always_inline)) int protect_packet_payload(picoquic_cnx_t 
 
 
 static __attribute__((always_inline)) int reserve_repair_frames(picoquic_cnx_t *cnx, framework_sender_t sender, size_t size_max, size_t symbol_size,
-                                        bool feedback_implied, bool protect_subset, source_symbol_id_t first_id_to_protect, uint16_t n_symbols_to_protect, protoop_arg_t *could_reserve) {
-    protoop_arg_t args[7];
+                                        bool feedback_implied, bool protect_subset,
+                                        source_symbol_id_t first_id_to_protect, uint16_t n_symbols_to_protect, uint16_t n_repair_symbols,
+                                        protoop_arg_t *could_reserve) {
+    protoop_arg_t args[8];
 
     args[0] = (protoop_arg_t) sender;
     args[1] = (protoop_arg_t) size_max;
@@ -132,23 +134,25 @@ static __attribute__((always_inline)) int reserve_repair_frames(picoquic_cnx_t *
     args[4] = (protoop_arg_t) protect_subset;
     args[5] = (protoop_arg_t) first_id_to_protect;
     args[6] = (protoop_arg_t) n_symbols_to_protect;
+    args[7] = (protoop_arg_t) n_repair_symbols;
 
-    int err = (int) run_noparam(cnx, FEC_RESERVE_REPAIR_FRAMES, 7, args, could_reserve);
+    int err = (int) run_noparam(cnx, FEC_RESERVE_REPAIR_FRAMES, 8, args, could_reserve);
     return err;
 }
 
 
-static __attribute__((always_inline)) int fec_what_to_send(picoquic_cnx_t *cnx, picoquic_path_t *path, uint64_t current_time, available_slot_reason_t reason, what_to_send_t *wts, source_symbol_id_t *first_id_to_protect, uint16_t *n_symbols_to_protect) {
+static __attribute__((always_inline)) int fec_what_to_send(picoquic_cnx_t *cnx, picoquic_path_t *path, uint64_t current_time, available_slot_reason_t reason, what_to_send_t *wts, source_symbol_id_t *first_id_to_protect, uint16_t *n_symbols_to_protect, uint16_t *n_repair_symbols) {
     protoop_arg_t args[3];
     args[0] = (protoop_arg_t) reason;
     args[1] = (protoop_arg_t) path;
     args[2] = (protoop_arg_t) current_time;
-    protoop_arg_t out[3];
+    protoop_arg_t out[4];
 
     int err = (what_to_send_t) run_noparam(cnx, FEC_PROTOOP_WHAT_TO_SEND, 3, args, out);
     *wts = out[0];
     *first_id_to_protect = out[1];
     *n_symbols_to_protect = out[2];
+    *n_repair_symbols = out[3];
     return err;
 }
 

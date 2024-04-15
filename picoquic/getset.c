@@ -196,6 +196,8 @@ protoop_arg_t get_cnx(picoquic_cnx_t *cnx, access_key_t ak, uint16_t param)
         return (protoop_arg_t) &cnx->pids_to_request.elems[param];
     case AK_CNX_QUIC_MTU_MAX:
         return cnx->quic->mtu_max;
+    case AK_CNX_FIXED_CWIN:
+        return cnx->fixed_cwin;
     default:
         printf("ERROR: unknown cnx access key %u\n", ak);
         return 0;
@@ -449,6 +451,9 @@ void set_cnx(picoquic_cnx_t *cnx, access_key_t ak, uint16_t param, protoop_arg_t
         break;
     case AK_CNX_PIDS_TO_REQUEST:
         printf("ERROR: trying to modify pids to request...\n");
+        break;
+    case AK_CNX_FIXED_CWIN:
+        cnx->fixed_cwin = (uint64_t) val;
         break;
     default:
         printf("ERROR: unknown cnx access key %u\n", ak);

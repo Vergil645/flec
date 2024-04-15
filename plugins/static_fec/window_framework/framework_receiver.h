@@ -2,8 +2,7 @@
 #include "../../helpers.h"
 #include "window_receive_buffers.h"
 #include "types.h"
-#include "fec_schemes/online_rlc_gf256/headers/equation.h"
-#include "fec_schemes/online_rlc_gf256/headers/arraylist.h"
+#include "util/arraylist.h"
 
 //#define MAX_RECEIVE_BUFFER_SIZE 1001
 
@@ -105,18 +104,9 @@ static __attribute__((always_inline)) int window_receive_source_symbol(picoquic_
     if (err) {
         return err;
     }
-    equation_t *removed_equation = NULL;
-    int used_in_system = 0;
-    window_fec_scheme_receive_source_symbol(cnx, wff->fs, ss, (void **) &removed_equation, &used_in_system);
-    if (removed_equation != NULL) {
-//        if (!removed_equation->is_from_source) {
-            // it was a repair symbol, we can discard it completely
-            equation_free(cnx, removed_equation);
-//        } else {
-//            // it comes from a source symbol, it is still useful when receiving new repair symbols, so keep the payload !
-//            equation_free_keep_repair_payload(cnx, removed_equation);
-//        }
-    }
+
+    window_fec_scheme_receive_source_symbol(cnx, wff->fs, ss);
+
     wff->has_received_a_source_symbol = true;
     if (highest_contiguous_received != get_highest_contiguous_received_source_symbol(wff->symbols_tracker)) {
         // let's find all the blocks protecting this symbol to see if we can recover the remaining
@@ -154,33 +144,25 @@ static __attribute__((always_inline)) int window_receive_packet_payload(picoquic
 // returns false otherwise: the symbol can be destroyed
 static __attribute__((always_inline)) int window_receive_repair_symbol(picoquic_cnx_t *cnx, window_fec_framework_receiver_t *wff, window_repair_symbol_t *rs) {
     if (rs->metadata.first_id + rs->metadata.n_protected_symbols - 1 <= get_highest_contiguous_received_source_symbol(wff->symbols_tracker)) {
-        PROTOOP_PRINTF(cnx, "DON'T ADD REPAIR SYMBOL: CONCERN NO INTERESTING SOURCE SYMBOL\n");
+        PROTOOP_PRINTF(cnx, "DON'T ADD REPAIR SYMBOL: CONCERN NO INTERESTING SOURCE SYMBOL: FIRST=%u N=%u\n", rs->metadata.first_id, rs->metadata.n_protected_symbols);
         return false;
     }
 
-    equation_t *removed_equation = NULL;
-    int used_in_system = 0;
     PROTOOP_PRINTF(cnx, "BEFORE FEC SCHEME RECEIVE REPAIR SYMBOL, rs[0, 1, 2, 3] = %u, %u, %u, %u\n", rs->repair_symbol.repair_payload[0], rs->repair_symbol.repair_payload[1], rs->repair_symbol.repair_payload[2], rs->repair_symbol.repair_payload[3]);
 
-    fec_scheme_receive_repair_symbol(cnx, wff->fs, rs, (void **) &removed_equation, &used_in_system);
+    int used = 0;
+    int err = fec_scheme_receive_repair_symbol(cnx, wff->fs, rs, &used);
+    if (err)
+        PROTOOP_PRINTF(cnx, "FEC SCHEME RETURNED ERROR %d\n", err);
+
     PROTOOP_PRINTF(cnx, "AFTER FEC SCHEME RECEIVE REPAIR SYMBOL\n");
 
-    if (removed_equation != NULL) {
-//        if (!removed_equation->is_from_source) {
-            // it was a repair symbol, we can discard it completely
-            equation_free(cnx, removed_equation);
-//        } else {
-//            // it comes from a source symbol, it is still useful when receiving new repair symbols, so keep the payload !
-//            equation_free_keep_repair_payload(cnx, removed_equation);
-//        }
-    }
-
-    if (!used_in_system) {
+    if (!used) {
         delete_window_repair_symbol(cnx, rs);
     }
 
     wff->has_received_a_repair_symbol = true;
-    return true;
+    return true; // TODO: return used?
 }
 
 //pre: the rss must have been created as an array of (window_repair_symbol_t *)

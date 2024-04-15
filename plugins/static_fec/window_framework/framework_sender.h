@@ -5,7 +5,7 @@
 #include <stdint.h>
 #include "../fec.h"
 #include "types.h"
-#include "fec_schemes/online_rlc_gf256/headers/arraylist.h"
+#include "util/arraylist.h"
 #include <red_black_tree.h>
 
 #define MAX_QUEUED_REPAIR_SYMBOLS 6
@@ -424,6 +424,8 @@ static __attribute__((always_inline)) int window_reserve_repair_frames(picoquic_
             return err;
         }
 
+        PROTOOP_PRINTF(cnx, "window_reserve_repair_frames: 1\n");
+
         if (size_max < predicted_size) {
             // FIXME: this means that the repair symbol is lost. Is that what we want ?
             PROTOOP_PRINTF(cnx, "NOT ENOUGH SPACE TO RESERVE A REPAIR FRAME: %lu < %lu\n", size_max, predicted_size);
@@ -437,6 +439,7 @@ static __attribute__((always_inline)) int window_reserve_repair_frames(picoquic_
             my_free(cnx, rf);
             return PICOQUIC_ERROR_MEMORY;
         }
+        PROTOOP_PRINTF(cnx, "window_reserve_repair_frames: 2\n");
         my_memset(slot, 0, sizeof(reserve_frame_slot_t));
         slot->frame_type = FRAME_REPAIR;
         slot->nb_bytes = REPAIR_FRAME_TYPE_BYTE_SIZE + predicted_size;
@@ -452,6 +455,7 @@ static __attribute__((always_inline)) int window_reserve_repair_frames(picoquic_
             return 1;
         }
         size_max -= slot->nb_bytes;
+        PROTOOP_PRINTF(cnx, "window_reserve_repair_frames: 3\n");
     }
 
     return 0;
@@ -607,16 +611,22 @@ static __attribute__((always_inline)) void sfpid_takes_off(window_fec_framework_
 
 static __attribute__((always_inline)) int generate_and_queue_repair_symbols(picoquic_cnx_t *cnx, window_fec_framework_t *wff, bool flush,
                                                                             uint16_t n_symbols_to_generate, uint16_t symbol_size,
-                                                                            bool protect_subset, window_source_symbol_id_t first_id, uint16_t n_source_symbols_to_protect){
-    protoop_arg_t args[7];
-    protoop_arg_t outs[2];
+                                                                            bool protect_subset,
+                                                                            window_source_symbol_id_t first_id, uint16_t n_source_symbols_to_protect, uint16_t n_repair_symbols, bool feedback_implied) {
+    protoop_arg_t* args = (protoop_arg_t*)my_calloc(cnx, 9, sizeof(protoop_arg_t));
+    if (!args)
+        return PICOQUIC_ERROR_MEMORY;
+
+    protoop_arg_t outs[2] = {0};
 
     // build the block to generate the symbols
 
 
     source_symbol_t **symbols = wff->symbols_buffer;
-    if (!symbols)
+    if (!symbols) {
+        my_free(cnx, args);
         return PICOQUIC_ERROR_MEMORY;
+    }
     my_memset(symbols, 0, wff->window_length*sizeof(source_symbol_t *));
     uint16_t n_symbols = 0;
     source_symbol_id_t first_protected_id = 0;
@@ -624,34 +634,40 @@ static __attribute__((always_inline)) int generate_and_queue_repair_symbols(pico
     uint64_t now = picoquic_current_time();
     PROTOOP_PRINTF(cnx, "GENERATE AND QUEUE, SUBSET = %d, FIRST = %u, N = %u, SMALLEST IN TRANSIT = %u\n", protect_subset, first_id, n_source_symbols_to_protect, wff->smallest_in_transit);
     int ret = 0;
-    if (!protect_subset || first_id < wff->smallest_in_transit) {
+    // if (!protect_subset || first_id < wff->smallest_in_transit) {
 
-        args[0] = (protoop_arg_t) symbols;
-        args[1] = (protoop_arg_t) wff;
-        args[2] = flush;
+    //     args[0] = (protoop_arg_t) symbols;
+    //     args[1] = (protoop_arg_t) wff;
+    //     args[2] = flush;
 
-        ret = 0;
-        ret = (int) run_noparam(cnx, "window_select_symbols_to_protect", 3, args, outs);
-        if (ret) {
-            PROTOOP_PRINTF(cnx, "ERROR WHEN SELECTING THE SYMBOLS TO PROTECT\n");
-            return ret;
-        }
-        n_symbols = outs[0];
-        first_protected_id = outs[1];
-    } else {
+    //     ret = 0;
+    //     ret = (int) run_noparam(cnx, "window_select_symbols_to_protect", 3, args, outs);
+    //     if (ret) {
+    //         PROTOOP_PRINTF(cnx, "ERROR WHEN SELECTING THE SYMBOLS TO PROTECT\n");
+    //         my_free(cnx, args);
+    //         return ret;
+    //     }
+    //     n_symbols = outs[0];
+    //     first_protected_id = outs[1];
+    // } else
+     {
         n_symbols = 0;
         first_protected_id = 0;
         for (window_source_symbol_id_t id = MAX(first_id, wff->smallest_in_transit) ; id < first_id + n_source_symbols_to_protect ; id++) {
-            PROTOOP_PRINTF(cnx, "PROTECT SUBSET = %d\n", protect_subset);
+            // PROTOOP_PRINTF(cnx, "PROTECT SUBSET = %d\n", protect_subset);
             uint32_t idx = id % MAX_SENDING_WINDOW_SIZE;
             source_symbol_t *ss = wff->fec_window[idx].symbol;
             if (!ss || wff->fec_window[idx].id != id) {
                 PROTOOP_PRINTF(cnx, "ERROR: INVALID SOURCE SYMBOL IN WINDOW: %u INSTEAD OF %u\n", wff->fec_window[idx].id, id);
+                my_free(cnx, args);
                 return -1;
             }
             if (n_symbols == 0)
                 first_protected_id = wff->fec_window[idx].id;
             symbols[n_symbols++] = ss;
+
+            uint64_t pn = decode_u64(ss->chunk_data);
+            PROTOOP_PRINTF(cnx, "id=%u pn=%u\n", id, pn);
         }
     }
     PROTOOP_PRINTF(cnx, "PROTECT SYMBOLS [%u, %u]\n", first_protected_id, first_protected_id + n_symbols - 1);
@@ -659,6 +675,7 @@ static __attribute__((always_inline)) int generate_and_queue_repair_symbols(pico
         repair_symbol_t **repair_symbols = my_malloc(cnx, n_symbols*sizeof(repair_symbol_t *));
         if (!repair_symbols) {
 //            my_free(cnx, symbols);
+            my_free(cnx, args);
             return PICOQUIC_ERROR_MEMORY;
         }
         my_memset(repair_symbols, 0, n_symbols_to_generate*sizeof(repair_symbol_t *));
@@ -669,8 +686,10 @@ static __attribute__((always_inline)) int generate_and_queue_repair_symbols(pico
         args[4] = (protoop_arg_t) n_symbols_to_generate;
         args[5] = (protoop_arg_t) symbol_size;
         args[6] = (protoop_arg_t) first_protected_id;
+        args[7] = (protoop_arg_t) n_repair_symbols;
+        args[8] = (protoop_arg_t) feedback_implied;
         uint64_t now2 = picoquic_current_time();
-        ret = (int) run_noparam(cnx, "fec_generate_repair_symbols", 7, args, outs);
+        ret = (int) run_noparam(cnx, "fec_generate_repair_symbols", 9, args, outs);
         PROTOOP_PRINTF(cnx, "DONE GENERATED, ELAPSED = %luµs\n", picoquic_current_time() - now2);
         window_fec_scheme_specific_t first_fec_scheme_specific;
         first_fec_scheme_specific.val_big_endian = (uint32_t) outs[0];
@@ -691,6 +710,7 @@ static __attribute__((always_inline)) int generate_and_queue_repair_symbols(pico
     }
     PROTOOP_PRINTF(cnx, "DONE PROTECTED, ELAPSED = %luµs\n", picoquic_current_time() - now);
 
+    my_free(cnx, args);
     return ret;
 }
 

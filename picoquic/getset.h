@@ -12,7 +12,7 @@ typedef uint16_t access_key_t;
 
 /**
  * @defgroup GETSET_FUNCTIONS Get/Set Functions
- * 
+ *
  * @{
  */
 
@@ -22,7 +22,7 @@ typedef uint16_t access_key_t;
  * \param cnx The connection context
  * \param ak The key of the field to get
  * \param param A parameter for the key. Its meaning depends on the accessed field
- * 
+ *
  * \return The value of the field with the corresponding key
  */
 protoop_arg_t get_cnx(picoquic_cnx_t *cnx, access_key_t ak, uint16_t param);
@@ -50,7 +50,7 @@ void set_cnx_metadata(picoquic_cnx_t *cnx, int idx, protoop_arg_t val);
  * Get and return the value of the plugin-specific metadata of this connection context
  * \p cnx at index \p idx
  * If the metadata have never been set before, zero is returned
- * 
+ *
  * \param cnx The connection pointer
  * \param idx The index of the plugin-specific metadata to get
  *
@@ -60,11 +60,11 @@ protoop_arg_t get_cnx_metadata(picoquic_cnx_t *cnx, int idx);
 
 /**
  * Get a specific field belonging to the path \p path
- * 
+ *
  * \param path The path structure pointer
  * \param ak The key of the field to get
  * \param param A parameter for the key. Its meaning depends on the accessed field
- * 
+ *
  * \return The value of the field with the corresponding key
  */
 protoop_arg_t get_path(picoquic_path_t *path, access_key_t ak, uint16_t param);
@@ -81,7 +81,7 @@ void set_path(picoquic_path_t *path, access_key_t ak, uint16_t param, protoop_ar
 
 /**
  * Set the plugin-specific metadata of this path at index \p idx to \p val
- * 
+ *
  * \param cnx The connection pointer
  * \param path The path pointer
  * \param idx The index of the plugin-specific metadata
@@ -92,7 +92,7 @@ void set_path_metadata(picoquic_cnx_t *cnx, picoquic_path_t *path, int idx, prot
 /**
  * Get and return the value of the plugin-specific metadata of this path at index \p idx
  * If the metadata have never been set before, zero is returned
- * 
+ *
  * \param cnx The connection pointer
  * \param path The path pointer
  * \param idx The index of the plugin-specific metadata to get
@@ -102,17 +102,17 @@ protoop_arg_t get_path_metadata(picoquic_cnx_t *cnx, picoquic_path_t *path, int 
 
 /**
  * Get a specific field beloging to the packet context \p pkt_ctx
- * 
+ *
  * \param pkt_ctx The packet context pointer
  * \param ak The key of the field to get
- * 
+ *
  * \return The value of the field with the corresponding key
  */
 protoop_arg_t get_pkt_ctx(picoquic_packet_context_t *pkt_ctx, access_key_t ak);
 
 /**
  * Set a specific field belonging to the packet context \p pkt_ctx to the value \p val
- * 
+ *
  * \param pkt_ctx The packet context pointer
  * \param ak The key of the field to get
  * \param val The value to set
@@ -121,17 +121,17 @@ void set_pkt_ctx(picoquic_packet_context_t *pkt_ctx, access_key_t ak, protoop_ar
 
 /**
  * Get a specific field belonging to the packet \p pkt
- * 
+ *
  * \param pkt The packet pointer
  * \param ak The key of the field to get
- * 
+ *
  * \return The value of the field with the corresponding key
  */
 protoop_arg_t get_pkt(picoquic_packet_t *pkt, access_key_t ak);
 
 /**
  * Set a specific field belonging to the packet \p pkt to the value \p val
- * 
+ *
  * \param pkt The packet pointer
  * \param ak The key of the field to get
  * \param val The value to set
@@ -162,17 +162,17 @@ int get_pkt_n_metadata(picoquic_cnx_t *cnx, picoquic_packet_t *pkt, int *idxs, i
 
 /**
  * Get a specific field belonging to the sack item \p sack_item
- * 
+ *
  * \param sack_item The sack_item pointer
  * \param ak The key of the field to get
- * 
+ *
  * \return The value of the field with the corresponding key
  */
 protoop_arg_t get_sack_item(picoquic_sack_item_t *sack_item, access_key_t ak);
 
 /**
  * Set a specific field belonging to the sack item \p sack_item to the value \p val
- * 
+ *
  * \param sack_item The sack_item pointer
  * \param ak The key of the field to get
  * \param val The value to set
@@ -181,17 +181,17 @@ void set_sack_item(picoquic_sack_item_t *sack_item, access_key_t ak, protoop_arg
 
 /**
  * Get a specific field belonging to the connection id \p cnxid
- * 
+ *
  * \param cnxid The connection id pointer
  * \param ak The key of the field to get
- * 
+ *
  * \return The value of the field with the corresponding key
  */
 protoop_arg_t get_cnxid(picoquic_connection_id_t *cnxid, access_key_t ak);
 
 /**
  * Set a specific field belonging to the connection id \p cnxid to the value \p val
- * 
+ *
  * \param cnxid The connection id pointer
  * \param ak The key of the field to get
  * \param val The value to set
@@ -200,17 +200,17 @@ void set_cnxid(picoquic_connection_id_t *cnxid, access_key_t ak, protoop_arg_t v
 
 /**
  * Get a specific field belonging to the stream_head \p stream_head
- * 
+ *
  * \param stream_head The stream head pointer
  * \param ak The key of the field to get
- * 
+ *
  * \return The value of the field with the corresponding key
  */
 protoop_arg_t get_stream_head(picoquic_stream_head *stream_head, access_key_t ak);
 
 /**
  * Set a specific field belonging to the stream_head \p stream_head to the value \p val
- * 
+ *
  * \param cnxid The stream head pointer
  * \param ak The key of the field to get
  * \param val The value to set
@@ -229,17 +229,17 @@ protoop_arg_t get_stream_data(picoquic_stream_data *stream_data, access_key_t ak
 
 /**
  * Get a specific field belonging to the crypto context \p crypto_context
- * 
+ *
  * \param crypto_context The crypto context pointer
  * \param ak The key of the field to get
- * 
+ *
  * \return The value of the field with the corresponding key
  */
 protoop_arg_t get_crypto_context(picoquic_crypto_context_t *crypto_context, access_key_t ak);
 
 /**
  * Set a specific field belonging to the crypto context \p crypto_context to the value \p val
- * 
+ *
  * \param cnxid The crypto context pointer
  * \param ak The key of the field to get
  * \param val The value to set
@@ -248,17 +248,17 @@ void set_crypto_context(picoquic_crypto_context_t *crypto_context, access_key_t 
 
 /**
  * Get a specific field belonging to the packet header \p ph
- * 
+ *
  * \param ph The packet header pointer
  * \param ak The key of the field to get
- * 
+ *
  * \return The value of the field with the corresponding key
  */
 protoop_arg_t get_ph(picoquic_packet_header *ph, access_key_t ak);
 
 /**
  * Set a specific field belonging to the packet header \p ph to the value \p val
- * 
+ *
  * \param cnxid The packet header pointer
  * \param ak The key of the field to get
  * \param val The value to set
@@ -268,10 +268,10 @@ void set_ph(picoquic_packet_header *ph, access_key_t ak, protoop_arg_t val);
 /**
  * Get a specific field belonging to the pid request \p preq
  * \warning This API is not stable, do not use it!
- * 
+ *
  * \param preq The pid request pointer
  * \param ak The key of the field to get
- * 
+ *
  * \return The value of the field with the corresponding key
  */
 protoop_arg_t get_preq(plugin_req_pid_t *preq, access_key_t ak);
@@ -279,7 +279,7 @@ protoop_arg_t get_preq(plugin_req_pid_t *preq, access_key_t ak);
 /**
  * Set a specific field belonging to the pid request \p preq to the value \p val
  * \warning This API is not stable, do not use it!
- * 
+ *
  * \param preq The pid request pointer
  * \param ak The key of the field to get
  * \param val The value to set
@@ -308,11 +308,11 @@ void set_preq(plugin_req_pid_t *preq, access_key_t ak, protoop_arg_t val);
 #define TRANSPORT_PARAMETER_INITIAL_MAX_STREAM_DATA_UNIDIR 0x0b
 /**
  * @}
- * 
+ *
  * @defgroup GETSET_CNX_AK Connection Access Keys
- * 
+ *
  * \brief Those access keys are dedicated to the \p get_cnx and \p set_cnx calls.
- * 
+ *
  * @{
  */
 
@@ -448,14 +448,16 @@ void set_preq(plugin_req_pid_t *preq, access_key_t ak, protoop_arg_t val);
 #define AK_CNX_QUIC_MTU_MAX 0x41
 /** Max receive window size for each stream, as uint64_t */
 #define AK_CNX_MAX_STREAM_RECEIVE_WINDOW_SIZE 0x42
+/** Fixed congestion window size */
+#define AK_CNX_FIXED_CWIN 0x43
 
 /**
  * @}
- * 
+ *
  * @defgroup GETSET_PATH_AK Path Access Keys
- * 
+ *
  * \brief Those access keys are dedicated to the \p get_path and \p set_path calls.
- * 
+ *
  * @{
  */
 
@@ -537,11 +539,11 @@ void set_preq(plugin_req_pid_t *preq, access_key_t ak, protoop_arg_t val);
 #define AK_PATH_BANDWIDTH_ESTIMATE 0x28
 /**
  * @}
- * 
+ *
  * @defgroup GETSET_PKT_CTX_AK Packet context Access Keys
- * 
+ *
  * \brief Those access keys are dedicated to the \p get_pkt_ctx and \p set_pkt_ctx calls.
- * 
+ *
  * @{
  */
 
@@ -582,11 +584,11 @@ void set_preq(plugin_req_pid_t *preq, access_key_t ak, protoop_arg_t val);
 
 /**
  * @}
- * 
+ *
  * @defgroup GETSET_PKT_AK Packet Access Keys
- * 
+ *
  * \brief Those access keys are dedicated to the \p get_pkt and \p set_pkt calls.
- * 
+ *
  * @{
  */
 
@@ -628,11 +630,11 @@ void set_preq(plugin_req_pid_t *preq, access_key_t ak, protoop_arg_t val);
 
 /**
  * @}
- * 
+ *
  * @defgroup GETSET_SACK_ITEM_AK SACK item Access Keys
- * 
+ *
  * \brief Those access keys are dedicated to the \p get_sack_item and \p set_sack_item calls.
- * 
+ *
  * @{
  */
 
@@ -645,11 +647,11 @@ void set_preq(plugin_req_pid_t *preq, access_key_t ak, protoop_arg_t val);
 
 /**
  * @}
- * 
+ *
  * @defgroup GETSET_CNXID_AK Connection ID Access Keys
- * 
+ *
  * \brief Those access keys are dedicated to the \p get_cnxid and \p set_cnxid calls.
- * 
+ *
  * @{
  */
 
@@ -660,11 +662,11 @@ void set_preq(plugin_req_pid_t *preq, access_key_t ak, protoop_arg_t val);
 
 /**
  * @}
- * 
+ *
  * @defgroup GETSET_STREAM_HEAD_AK Stream head Access Keys
- * 
+ *
  * \brief Those access keys are dedicated to the \p get_stream_head and \p set_stream_head calls.
- * 
+ *
  * @{
  */
 
@@ -714,11 +716,11 @@ void set_preq(plugin_req_pid_t *preq, access_key_t ak, protoop_arg_t val);
 
 /**
  * @}
- * 
+ *
  * @defgroup GETSET_CRYPTO_CONTEXT_AK Crypto context Access Keys
- * 
+ *
  * \brief Those access keys are dedicated to the \p get_crypto_context and \p set_crypto_context calls.
- * 
+ *
  * @{
  */
 
@@ -727,11 +729,11 @@ void set_preq(plugin_req_pid_t *preq, access_key_t ak, protoop_arg_t val);
 
 /**
  * @}
- * 
+ *
  * @defgroup GETSET_PH_AK Packet header Access Keys
- * 
+ *
  * \brief Those access keys are dedicated to the \p get_ph and \p set_ph calls.
- * 
+ *
  * @{
  */
 
@@ -750,12 +752,12 @@ void set_preq(plugin_req_pid_t *preq, access_key_t ak, protoop_arg_t val);
 
 /**
  * @}
- * 
+ *
  * @defgroup GETSET_PIDREQ_AK PIDs to Request Access Keys
- * 
+ *
  * \brief Those access keys are dedicated to the \p get_pidred and \p get_pidred calls.
  * \warning This API is not stable, please do not use it!
- * 
+ *
  * @{
  */
 

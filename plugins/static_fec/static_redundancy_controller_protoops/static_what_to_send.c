@@ -37,7 +37,8 @@ protoop_arg_t static_what_to_send(picoquic_cnx_t *cnx) {
 
     window_source_symbol_id_t first_id_to_protect = 0;
     uint16_t number_of_symbols_to_protect = 0;
-    static_packet_type_t ptype = what_to_send(cnx, path, wff->controller, current_time, reason, &first_id_to_protect, &number_of_symbols_to_protect, &window);
+    uint16_t number_of_repair_symbols = 0;
+    static_packet_type_t ptype = what_to_send(cnx, path, wff->controller, current_time, reason, &first_id_to_protect, &number_of_symbols_to_protect, &number_of_repair_symbols, &window);
     number_of_symbols_to_protect = MIN(number_of_symbols_to_protect, window_size(&window));
 
     if (window_size(&window) > 0) {
@@ -60,6 +61,7 @@ protoop_arg_t static_what_to_send(picoquic_cnx_t *cnx) {
     set_cnx(cnx, AK_CNX_OUTPUT, 0, wts);
     set_cnx(cnx, AK_CNX_OUTPUT, 1, first_id_to_protect);
     set_cnx(cnx, AK_CNX_OUTPUT, 2, number_of_symbols_to_protect);
+    set_cnx(cnx, AK_CNX_OUTPUT, 3, number_of_repair_symbols);
 
     return 0;
 }

@@ -89,6 +89,7 @@ typedef struct {
     struct {
         window_source_symbol_id_t first_id_to_protect;
         uint16_t n_symbols_to_protect;
+        uint16_t n_repair_symbols;
     } fec_params;
 
     window_source_symbol_id_t window_first_id_during_last_run;
@@ -762,10 +763,13 @@ static __attribute__((always_inline)) bool get_packet_for_retransmission(picoqui
         if (is_slot_in_history(controller->slots_history, lost_slot)) {
             history_get_sent_slot_metadata(controller->slots_history, lost_slot, &md);
             if ((md.source_metadata.number_of_symbols > 0 &&
-                 ((md.source_metadata.first_symbol_id + md.source_metadata.number_of_symbols - 1) >= window->start)) ||
-                (md.repair_metadata.number_of_repair_symbols > 0 &&
+                 ((md.source_metadata.first_symbol_id + md.source_metadata.number_of_symbols - 1) >= window->start))
+                //  || (md.repair_metadata.is_fb_fec)
+                 ||
+                (md.repair_metadata.is_fb_fec && md.repair_metadata.number_of_repair_symbols > 0 &&
                  ((md.repair_metadata.first_protected_source_symbol_id + md.repair_metadata.number_of_repair_symbols -
-                   1) >= window->start))) {
+                   1) >= window->start))
+                ) {
                 break;
             }
         }
@@ -780,7 +784,7 @@ static __attribute__((always_inline)) bool get_packet_for_retransmission(picoqui
             *first_id_to_protect = md.source_metadata.first_symbol_id;
             *n_symbols_to_protect = NUMBER_OF_SOURCE_SYMBOLS_TO_PROTECT_IN_FB_FEC;
             //                    PROTOOP_PRINTF(cnx, "FIRST ID IN LOST SLOT ID %u\n", *first_id_to_protect);
-        } else if (md.repair_metadata.number_of_repair_symbols > 0) {
+        } else if (md.repair_metadata.number_of_repair_symbols > 0) { // won't ever be true
             *first_id_to_protect = md.repair_metadata.first_protected_source_symbol_id;
             *n_symbols_to_protect = md.repair_metadata.n_protected_source_symbols;
         } else {
@@ -827,7 +831,7 @@ check_protect_condition(picoquic_cnx_t* cnx, picoquic_path_t* path, static_redun
 static __attribute__((always_inline)) static_packet_type_t
 what_to_send(picoquic_cnx_t* cnx, picoquic_path_t* path, window_redundancy_controller_t c, uint64_t current_time,
              available_slot_reason_t reason, window_source_symbol_id_t* first_id_to_protect,
-             uint16_t* n_symbols_to_protect, fec_window_t* window) {
+             uint16_t* n_symbols_to_protect, uint16_t* n_repair_symbols, fec_window_t* window) {
     plugin_state_t* state = get_plugin_state(cnx);
     if (!state)
         return PICOQUIC_ERROR_MEMORY;
@@ -856,18 +860,18 @@ what_to_send(picoquic_cnx_t* cnx, picoquic_path_t* path, window_redundancy_contr
     if (state->n_reserved_id_or_repair_frames > 0) {
         type = nothing;
     } else if (get_packet_for_retransmission(cnx, controller, first_id_to_protect, n_symbols_to_protect, window)) {
+        *n_repair_symbols = 1;
         type = fb_fec_packet;
-    } else if (!is_window_empty(window) && can_send_new_or_fec) {
+    } else if (!is_window_empty(window) && can_send_new_or_fec) { // remove !is_window_empty(window)
         if (!controller->flush_dof_mode && is_buffer_empty_old(controller->what_to_send)) {
-            uint16_t n_repair_symbols = 0;
-
             bool added_new_packet = false;
-            bool should_protect = check_protect_condition(
-                cnx, path, controller, GRANULARITY, &controller->fec_params.first_id_to_protect,
-                &controller->fec_params.n_symbols_to_protect, &n_repair_symbols, window, current_time);
+            bool should_protect =
+                check_protect_condition(cnx, path, controller, GRANULARITY, &controller->fec_params.first_id_to_protect,
+                                        &controller->fec_params.n_symbols_to_protect,
+                                        &controller->fec_params.n_repair_symbols, window, current_time);
 
             if (should_protect) {
-                for (uint16_t i = 0; i < n_repair_symbols; ++i) {
+                for (uint16_t i = 0; i < controller->fec_params.n_repair_symbols; ++i) {
                     add_elem_to_buffer_old(controller->what_to_send, fec_packet);
                 }
             } else if (has_protected_data_to_send) {
@@ -885,6 +889,7 @@ what_to_send(picoquic_cnx_t* cnx, picoquic_path_t* path, window_redundancy_contr
             if (type == fec_packet) {
                 *first_id_to_protect = controller->fec_params.first_id_to_protect;
                 *n_symbols_to_protect = controller->fec_params.n_symbols_to_protect;
+                *n_repair_symbols = controller->fec_params.n_repair_symbols;
             }
         } else {
             type = nothing;

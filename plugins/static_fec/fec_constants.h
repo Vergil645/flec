@@ -38,7 +38,8 @@
 #define MAX_SRC_FPI_SIZE 16
 
 #ifndef CHUNK_SIZE
-#define CHUNK_SIZE 1300
+// #define CHUNK_SIZE 1300
+#define CHUNK_SIZE 1299
 #endif
 
 

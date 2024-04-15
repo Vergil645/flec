@@ -716,27 +716,23 @@ static __attribute__((always_inline)) uint8_t *parse_window_recovered_frame(pico
 }
 
 #define WINDOW_FEC_SCHEME_RECEIVE_SOURCE_SYMBOL "win_fs_recv_ss"
-static __attribute__((always_inline)) int window_fec_scheme_receive_source_symbol(picoquic_cnx_t *cnx, fec_scheme_t fec_scheme, window_source_symbol_t *ss, void **removed, int *used_in_system) {
+static __attribute__((always_inline)) int window_fec_scheme_receive_source_symbol(picoquic_cnx_t *cnx, fec_scheme_t fec_scheme, window_source_symbol_t *ss) {
     protoop_arg_t args[2];
     args[0] = (protoop_arg_t) fec_scheme;
     args[1] = (protoop_arg_t) ss;
-    protoop_arg_t output[2];
-    int retval = (int) run_noparam(cnx, WINDOW_FEC_SCHEME_RECEIVE_SOURCE_SYMBOL, 2, args, output);
-    *removed = (void *) output[0];
-    *used_in_system = output[1];
+    int retval = (int) run_noparam(cnx, WINDOW_FEC_SCHEME_RECEIVE_SOURCE_SYMBOL, 2, args, NULL);
     return retval;
 }
 
 
 #define WINDOW_FEC_SCHEME_RECEIVE_REPAIR_SYMBOL "win_fs_recv_rs"
-static __attribute__((always_inline)) int fec_scheme_receive_repair_symbol(picoquic_cnx_t *cnx, fec_scheme_t fec_scheme, window_repair_symbol_t *rs, void **removed, int *used_in_system) {
+static __attribute__((always_inline)) int fec_scheme_receive_repair_symbol(picoquic_cnx_t *cnx, fec_scheme_t fec_scheme, window_repair_symbol_t *rs, int *used) {
     protoop_arg_t args[2];
     args[0] = (protoop_arg_t) fec_scheme;
     args[1] = (protoop_arg_t) rs;
-    protoop_arg_t output[2];
+    protoop_arg_t output[1];
     int retval = (int) run_noparam(cnx, WINDOW_FEC_SCHEME_RECEIVE_REPAIR_SYMBOL, 2, args, output);
-    *removed = (void *) output[0];
-    *used_in_system = output[1];
+    *used = (int)output[0];
     return retval;
 }
 
