@@ -1,12 +1,60 @@
+# ABC
+
+Adaptive Block Coding (ABC) was inspired by FlEC. It adapts the loss recovery mechanism to the
+use-case using protocol plugins as FlEC do.
+
+The main difference is that ABC uses **Reed-Solomon codes** instead of **RLNC**. Moreover, ABC can be used with **any linear block codes**!
+
+Current version uses Reed-Solomon codes implemented via *Cyclotomic Fast Fourier transform*. This method is **>2 times faster than RLNC**. You can find standalone implementation of this method [here](https://github.com/Vergil645/reed-solomon).
+
+In `bulk` and `buffer-limited` use-cases ABC is almost as good as FlEC in terms of DCT (Download Completion Time). Moreover, ABC generates **less traffic** than FlEC in some cases.
+
+All the code of ABC is contained in the `plugin/abc` directory. These plugins also require the use of
+the `loss_monitor` plugin that gather network statistics concerning packet loss.
+
+Three variations of ABC:
+- `abc_rs_bulk.plugin` for bulk downloads using Reed-Solomon codes
+- `abc_rs_buffer_limited.plugin` for bulk downloads with limited receive windows using RLNC
+- `abc_rlc_bulk.plugin` for bulk downloads using Reed-Solomon codes
+- `abc_rlc_buffer_limited.plugin` for bulk downloads with limited receive windows using RLNC
+
+## Running ABC in NS3-DCE and reproducing the results
+
+The NS3-DCE environment is available [here](https://github.com/Vergil645/flec-simulation-experiments/tree/abc).
+
+### Reproducing the results
+The only dependency you need to install is git and [Docker](https://www.docker.com/).
+The computations with NS3 are CPU-intensive, the more CPUs you have, the better it is. You will need between 2GB and 3GB of RAM per CPU you use for the experiments.
+
+Here is a script you can run anywhere on Linux to reproduce the results:
+
+```bash
+#! /usr/bin/env bash
+
+git clone --recurse-submodules https://github.com/Vergil645/flec
+git clone --recurse-submodules https://github.com/Vergil645/flec-simulation-experiments
+
+<Fetch 'abc' branch of flec-simulation-experiments>
+
+<Choose experiments in flec-simulation-experiments/reproduce_and_plot_results.sh>
+
+pushd flec-simulation-experiments && bash reproduce_and_plot_results.sh ../flec && popd
+
+echo Reproduction finished ! The resulting graphs can be found in flec-simulation-experiments/results_plots :
+ls flec-simulation-experiments/results_plots
+
+echo The raw results can be found in flec-simulation-experiments/results
+```
+
 # FlEC
 
 FlEC is a research paper redefining the loss recovery mechanism of the QUIC protocol through the use
-of Forward Erasure Correction. In this article, we propose to adapt the loss recovery mechanism to the 
+of Forward Erasure Correction. In this article, we propose to adapt the loss recovery mechanism to the
 use-case using protocol plugins !
 
 The full paper is part of the Transactions on Networking journal and can be found [here](https://ieeexplore.ieee.org/document/9861377) or on [arXiv](https://arxiv.org/abs/2208.07741).
 
-All the code of FlEC is contained in the (not so simple!) `simple_fec` plugin under the `plugin` directory. This plugins also reguires the use of 
+All the code of FlEC is contained in the (not so simple!) `simple_fec` plugin under the `plugin` directory. This plugins also reguires the use of
 the `loss_monitor` plugin that gather network statistics concerning packet loss.
 
 Three variations of FlEC are used in the article:
@@ -16,9 +64,9 @@ Three variations of FlEC are used in the article:
 
 Note also that `ac_rlnc.plugin` implements the original AC-RLNC article.
 
-## Running FlEC ni NS3-DCE and reproducing the results
+## Running FlEC in NS3-DCE and reproducing the results
 
-While good results can be obtained in real-world networks such as Starlink when losses occur (c.f. the [FlEC article](https://ieeexplore.ieee.org/document/9861377)), the PQUIC implementation used by FlEC is computationnaly heavy and can deteriorate the 
+While good results can be obtained in real-world networks such as Starlink when losses occur (c.f. the [FlEC article](https://ieeexplore.ieee.org/document/9861377)), the PQUIC implementation used by FlEC is computationnaly heavy and can deteriorate the
 data transfers in some cases. We thus provide here a full NS3-DCE working environment to evaluate FlEC and compare it with other solutions, being able to run *real* protocol implementations (not models) inside the NS3 environment.
 Feel free to reuse it and add your own solutions in this environment !
 
