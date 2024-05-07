@@ -42,7 +42,7 @@ protoop_arg_t available_slot(picoquic_cnx_t *cnx) {
 
     if (state->n_reserved_id_or_repair_frames > 0 && wts != what_to_send_feedback_implied_repair_symbol) {
         fec_cancelled_packet(cnx, wts, first_id, n_symbols_to_protect);
-        PROTOOP_PRINTF(cnx, "ALREADY RESERVED FRAMES ARE PRESENT\n"); // TODO: check on tests
+        PROTOOP_PRINTF(cnx, "ALREADY RESERVED FRAMES ARE PRESENT\n");
         return 0;
     }
 

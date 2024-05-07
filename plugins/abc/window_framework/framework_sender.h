@@ -689,7 +689,7 @@ static __attribute__((always_inline)) int generate_and_queue_repair_symbols(pico
         args[7] = (protoop_arg_t) n_repair_symbols;
         args[8] = (protoop_arg_t) feedback_implied;
         uint64_t now2 = picoquic_current_time();
-        ret = (int) run_noparam(cnx, "fec_generate_repair_symbols", 9, args, outs);
+        ret = (int) run_noparam(cnx, "fec_generate_repair_symbol", 9, args, outs);
         PROTOOP_PRINTF(cnx, "DONE GENERATED, ELAPSED = %luµs\n", picoquic_current_time() - now2);
         window_fec_scheme_specific_t first_fec_scheme_specific;
         first_fec_scheme_specific.val_big_endian = (uint32_t) outs[0];

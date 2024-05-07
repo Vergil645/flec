@@ -932,7 +932,7 @@ static __attribute__((always_inline)) void post_update_controller_state(picoquic
 
 // if   type == fb_fec_packet: adds corresponding slot to controller->lost_and_non_fec_retransmitted_slots
 // elif type == fec_packet: controller->n_fec_in_flight--
-// else: pass
+// else pass
 static __attribute__((always_inline)) void cancelled_packet(picoquic_cnx_t* cnx, window_redundancy_controller_t c,
                                                             static_packet_type_t type, source_symbol_id_t first_id,
                                                             uint64_t n_symbols_to_protect) {
