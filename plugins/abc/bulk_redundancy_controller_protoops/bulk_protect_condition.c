@@ -57,9 +57,6 @@ protoop_arg_t bulk_protect_condition(picoquic_cnx_t* cnx) {
         r = MIN(r, 1 + (uint16_t)(((uint64_t)k * lr_gran_1) / (granularity - lr_gran_1)));
     }
 
-    PROTOOP_PRINTF_1(cnx, "BULK PC: lr_gran=%lu, k=%u, r=%u, window_first_unprotected_id=%u\n", lr_gran, k, r,
-                     addon->window_first_unprotected_id);
-
     set_cnx(cnx, AK_CNX_OUTPUT, 0, addon->window_first_unprotected_id); // first_id_to_protect
     set_cnx(cnx, AK_CNX_OUTPUT, 1, k);                                  // n_symbols_to_protect
     set_cnx(cnx, AK_CNX_OUTPUT, 2, r);                                  // n_repair_symbols

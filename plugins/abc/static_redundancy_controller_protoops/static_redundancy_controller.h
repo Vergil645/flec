@@ -727,11 +727,6 @@ static __attribute__((always_inline)) void pre_update_controller_state(picoquic_
         return;
     }
 
-    // PROTOOP_PRINTF_1(cnx, "STATIC update_controller_state\n");
-
-    // TODO: add seen packets concept and do MD = number of lost packets of the window - number of seen packets of the
-    // window
-
     if (controller->window_first_id_during_last_run != current_window->start && current_window->start > 0) {
         prune_md_buffer(cnx, controller, controller->window_first_id_during_last_run, current_window->start - 1);
         prune_ad_buffer(cnx, controller, current_window);
@@ -847,14 +842,6 @@ what_to_send(picoquic_cnx_t* cnx, picoquic_path_t* path, window_redundancy_contr
     bool can_send_new_or_fec = (cwin > bytes_in_transit + state->n_reserved_id_or_repair_frames * (uint64_t)send_mtu);
     bool has_protected_data_to_send = state->has_fec_protected_data_to_send;
 
-    PROTOOP_PRINTF_1(cnx,
-                     "WTS 6: n_reserved_id_or_repair_frames=%lu, is_window_empty=%d, reason=%d, "
-                     "has_protected_data_to_send=%d, cwin=%lu, "
-                     "bytes_in_transit=%lu, send_mtu=%u, p_cwin=%u, max_data_remote=%lu, data_sent=%lu\n",
-                     state->n_reserved_id_or_repair_frames, is_window_empty(window), reason, has_protected_data_to_send,
-                     cwin, bytes_in_transit, send_mtu, p_cwin, get_cnx(cnx, AK_CNX_MAXDATA_REMOTE, 0),
-                     get_cnx(cnx, AK_CNX_DATA_SENT, 0));
-
     buffer_elem_t type = nothing;
 
     if (state->n_reserved_id_or_repair_frames > 0) {
@@ -898,22 +885,22 @@ what_to_send(picoquic_cnx_t* cnx, picoquic_path_t* path, window_redundancy_contr
 
     switch (type) {
     case new_rlnc_packet:
-        PROTOOP_PRINTF_1(cnx, "WTS: NEW: id=%u\n", window->end);
+        PROTOOP_PRINTF(cnx, "ABC WTS: NEW: id=%u\n", window->end);
         break;
     case fec_packet:
-        PROTOOP_PRINTF_1(cnx, "WTS: FEC: first_id_to_protect=%u n_symbols_to_protect=%u\n", *first_id_to_protect,
+        PROTOOP_PRINTF(cnx, "ABC WTS: FEC: first_id_to_protect=%u n_symbols_to_protect=%u\n", *first_id_to_protect,
                          *n_symbols_to_protect);
         controller->ad++;
         controller->n_fec_in_flight++;
         break;
     case fb_fec_packet:
-        PROTOOP_PRINTF_1(cnx, "WTS: RETR: first_id_to_protect=%u n_symbols_to_protect=%u\n", *first_id_to_protect,
+        PROTOOP_PRINTF(cnx, "ABC WTS: RETR: first_id_to_protect=%u n_symbols_to_protect=%u\n", *first_id_to_protect,
                          *n_symbols_to_protect);
         controller->ad++;
         controller->n_fec_in_flight++;
         break;
     default:
-        PROTOOP_PRINTF_1(cnx, "WTS: NONE\n");
+        PROTOOP_PRINTF(cnx, "ABC WTS: NONE\n");
         break;
     }
 

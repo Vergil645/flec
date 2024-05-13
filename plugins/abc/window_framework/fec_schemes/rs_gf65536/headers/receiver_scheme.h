@@ -108,7 +108,7 @@ _receiver_scheme_extend_unknown_ids(picoquic_cnx_t* cnx, receiver_scheme_t* sche
                 }
             }
         } else if (current_id < arraylist_get_first(&scheme_receiver->unknown_ids)) {
-            PROTOOP_PRINTF(cnx, "should not happen: _receiver_scheme_extend_unknown_ids\n");
+            // should not happen
             return -1;
         }
     }
@@ -120,6 +120,7 @@ static inline __attribute__((always_inline)) int
 _receiver_scheme_receive_source_data(picoquic_cnx_t* cnx, receiver_scheme_t* scheme_receiver, size_t symbol_size,
                                      window_source_symbol_id_t id, uint8_t* source_data) {
     int index = -1;
+    int ret = 0;
 
     if (arraylist_is_empty(&scheme_receiver->unknown_ids) || id < arraylist_get_first(&scheme_receiver->unknown_ids)) {
         // should be ignored, because unknowns_ids[0] - 1 is the highest contiguously recieved
@@ -133,7 +134,7 @@ _receiver_scheme_receive_source_data(picoquic_cnx_t* cnx, receiver_scheme_t* sch
         // has been detected as lost and not recovered yet
 
         if (rbt_is_empty(cnx, &scheme_receiver->code_data_buffer)) {
-            PROTOOP_PRINTF(cnx, "should not happen: _receiver_scheme_receive_source_data 1\n");
+            // should not happen
             return PICOQUIC_ERROR_UNEXPECTED_ERROR;
         }
 
@@ -142,25 +143,25 @@ _receiver_scheme_receive_source_data(picoquic_cnx_t* cnx, receiver_scheme_t* sch
 
         if (!rbt_ceiling(cnx, &scheme_receiver->code_data_buffer, (rbt_key)id, (rbt_key*)&last_protected_id,
                          (rbt_val*)&data)) {
-            PROTOOP_PRINTF(cnx, "should not happen: _receiver_scheme_receive_source_data 2\n");
+            // should not happen
             return PICOQUIC_ERROR_UNEXPECTED_ERROR;
         }
 
         if (id < data->first_id || id > last_protected_id) {
-            PROTOOP_PRINTF(cnx, "should not happen: _receiver_scheme_receive_source_data 3\n");
+            // should not happen
             return PICOQUIC_ERROR_UNEXPECTED_ERROR;
         }
 
         { // add symbol and try to recover
             uint16_t i = (uint16_t)(id - data->first_id);
-            code_data_add_symbol_and_try_to_recover(cnx, scheme_receiver->rsd, data, i, source_data,
-                                                    &scheme_receiver->recovered_source_symbols_arraylist);
+            ret = code_data_add_symbol_and_try_to_recover(cnx, scheme_receiver->rsd, data, i, source_data,
+                                                          &scheme_receiver->recovered_source_symbols_arraylist);
         }
 
         arraylist_set(&scheme_receiver->unknown_recovered, index, true);
     }
 
-    return 0;
+    return ret;
 }
 
 static inline __attribute__((always_inline)) int
@@ -183,10 +184,8 @@ _receiver_scheme_receive_fb_fec(picoquic_cnx_t* cnx, receiver_scheme_t* scheme_r
     uint16_t rs_idx = decode_u16(rs->metadata.fss.val + 2);
     int ret = 0;
 
-    PROTOOP_PRINTF(cnx, "START PROCESSING FB_FEC\n");
-
     if (k != 1 || r != 1 || rs_idx != 0) {
-        PROTOOP_PRINTF(cnx, "should not happen: _receiver_scheme_receive_fb_fec\n");
+        // should not happen
         return PICOQUIC_ERROR_UNEXPECTED_ERROR;
     }
 
@@ -197,11 +196,6 @@ _receiver_scheme_receive_fb_fec(picoquic_cnx_t* cnx, receiver_scheme_t* scheme_r
 
         ss->id = id;
         my_memcpy(ss->source_symbol._whole_data, rs->repair_symbol.repair_payload, symbol_size);
-
-        {
-            uint64_t pn = decode_u64(ss->source_symbol.chunk_data);
-            PROTOOP_PRINTF(cnx, "FB FEC RECOVERED id=%u, pn=%u\n", id, pn);
-        }
 
         arraylist_push(cnx, &scheme_receiver->recovered_source_symbols_arraylist, (uintptr_t)ss);
     }
@@ -254,13 +248,10 @@ receiver_scheme_receive_repair_symbol(picoquic_cnx_t* cnx, receiver_scheme_t* sc
         }
     }
 
-    { // add symbol and try to recover
-        uint16_t i = k + decode_u16(rs->metadata.fss.val + 2);
-        code_data_add_symbol_and_try_to_recover(cnx, scheme_receiver->rsd, data, i, rs->repair_symbol.repair_payload,
-                                                &scheme_receiver->recovered_source_symbols_arraylist);
-    }
-
-    return 0;
+    // add symbol and try to recover
+    uint16_t i = rs->metadata.n_protected_symbols + decode_u16(rs->metadata.fss.val + 2);
+    return code_data_add_symbol_and_try_to_recover(cnx, scheme_receiver->rsd, data, i, rs->repair_symbol.repair_payload,
+                                                   &scheme_receiver->recovered_source_symbols_arraylist);
 }
 
 static __attribute__((always_inline)) void receiver_scheme_recover_lost_symbols(picoquic_cnx_t* cnx,

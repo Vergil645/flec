@@ -1,6 +1,6 @@
 SRC=$(shell find . -wholename "*protoops/*.c")
 OBJ=$(SRC:.c=.o)
-CFLAGS=-I../../picoquic -I../../picoquic/gf256/flec-moepgf/include -DDISABLE_PROTOOP_PRINTF -DDISABLE_PROTOOP_PRINTF_1
+CFLAGS=-I../../picoquic -I../../picoquic/gf256/flec-moepgf/include -DDISABLE_PROTOOP_PRINTF
 
 all: $(SRC) $(OBJ)
 

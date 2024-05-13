@@ -160,11 +160,11 @@ static inline __attribute__((always_inline)) void code_data_destroy(picoquic_cnx
 static int _code_data_try_to_recover(picoquic_cnx_t* cnx, RS_t* rsd, code_data_t* data,
                                      arraylist_t* recovered_source_symbols_arraylist);
 
-static inline __attribute__((always_inline)) void
+static inline __attribute__((always_inline)) int
 code_data_add_symbol_and_try_to_recover(picoquic_cnx_t* cnx, RS_t* rsd, code_data_t* data, uint16_t i,
                                         uint8_t* symbol_data, arraylist_t* recovered_source_symbols_arraylist) {
     if (data->t <= data->r || !data->is_erased[i])
-        return;
+        return 0;
     data->is_erased[i] = false;
     --data->t;
 
@@ -179,8 +179,7 @@ code_data_add_symbol_and_try_to_recover(picoquic_cnx_t* cnx, RS_t* rsd, code_dat
         }
     }
 
-    if (_code_data_try_to_recover(cnx, rsd, data, recovered_source_symbols_arraylist) != 0)
-        PROTOOP_PRINTF(cnx, "FAILED TO RECOVER\n");
+    return _code_data_try_to_recover(cnx, rsd, data, recovered_source_symbols_arraylist);
 }
 
 static inline __attribute__((always_inline)) int

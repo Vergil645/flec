@@ -46,12 +46,6 @@
 #define PROTOOP_PRINTF(cnx, fmt, ...)
 #endif
 
-#ifndef DISABLE_PROTOOP_PRINTF_1
-#define PROTOOP_PRINTF_1(cnx, fmt, ...)   helper_protoop_printf(cnx, fmt, (protoop_arg_t[]){__VA_ARGS__}, PROTOOP_NUMARGS(__VA_ARGS__))
-#else
-#define PROTOOP_PRINTF_1(cnx, fmt, ...)
-#endif
-
 #define PSTREAM_RESET_SENT(stream) (get_stream_head(stream, AK_STREAMHEAD_FLAGS_RESET_SENT))
 #define PSTREAM_RESET_REQUESTED(stream) (get_stream_head(stream, AK_STREAMHEAD_FLAGS_RESET_REQUESTED))
 #define PSTREAM_RESET_RCVD(stream) (get_stream_head(stream, AK_STREAMHEAD_FLAGS_RESET_RECEIVED))
