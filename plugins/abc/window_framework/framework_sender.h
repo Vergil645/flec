@@ -666,8 +666,8 @@ static __attribute__((always_inline)) int generate_and_queue_repair_symbols(pico
                 first_protected_id = wff->fec_window[idx].id;
             symbols[n_symbols++] = ss;
 
-            uint64_t pn = decode_u64(ss->chunk_data);
-            PROTOOP_PRINTF(cnx, "id=%u pn=%u\n", id, pn);
+            // uint64_t pn = decode_u64(ss->chunk_data);
+            // PROTOOP_PRINTF(cnx, "id=%u pn=%u\n", id, pn);
         }
     }
     PROTOOP_PRINTF(cnx, "PROTECT SYMBOLS [%u, %u]\n", first_protected_id, first_protected_id + n_symbols - 1);
