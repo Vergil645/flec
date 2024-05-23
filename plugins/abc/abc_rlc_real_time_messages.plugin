@@ -1,0 +1,10 @@
+ru.mkolesov.abc rate_unlimited dynamic_memory
+core.plugin include
+static_adaptive.plugin include
+window_framework.plugin include
+window_online_rlc_fec_scheme.plugin include
+
+fec_protect_condition replace message_based_redundancy_controller_protoops/message_based_protect_condition.o
+
+schedule_next_stream replace window_framework/stream_scheduler_protoops/unreliable_messages_stream_scheduler.o
+find_ready_stream replace window_framework/stream_scheduler_protoops/unreliable_messages_stream_scheduler.o

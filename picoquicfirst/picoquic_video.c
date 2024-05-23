@@ -781,7 +781,7 @@ static int first_server_callback(picoquic_cnx_t* cnx,
         return 0;
     }
 
-    if (fin_or_event == picoquic_callback_close || 
+    if (fin_or_event == picoquic_callback_close ||
         fin_or_event == picoquic_callback_application_close ||
         fin_or_event == picoquic_callback_stateless_reset) {
         if (ctx != NULL) {
@@ -2103,7 +2103,7 @@ int quic_client(const char* ip_address_text, int server_port, const char * sni,
                     if (F_log != NULL) {
                         if (bytes_sent > 0)
                         {
-                            picoquic_log_packet_address(F_log, 
+                            picoquic_log_packet_address(F_log,
                                 picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx_client)),
                                 cnx_client, (struct sockaddr*)&server_address, 0, bytes_sent, picoquic_current_time());
                         }
@@ -2492,7 +2492,7 @@ typedef struct {
     picoquic_connection_id_t cnx_id_val;
 } cnx_id_callback_ctx_t;
 
-static void cnx_id_callback(picoquic_connection_id_t cnx_id_local, picoquic_connection_id_t cnx_id_remote, void* cnx_id_callback_ctx, 
+static void cnx_id_callback(picoquic_connection_id_t cnx_id_local, picoquic_connection_id_t cnx_id_remote, void* cnx_id_callback_ctx,
     picoquic_connection_id_t * cnx_id_returned)
 {
     uint64_t val64;
@@ -2720,6 +2720,8 @@ int main(int argc, char** argv)
                 cc_algorithm = picoquic_cubic_algorithm;
             } else if (strcasecmp(optarg, "newreno") == 0) {
                 cc_algorithm = picoquic_newreno_algorithm;
+            } else if (strcasecmp(optarg, "nocc") == 0) {
+                cc_algorithm = picoquic_nocc_algorithm;
             } else {
                 fprintf(stderr, "Invalid cc algorithm: %s\n", optarg);
                 usage();
